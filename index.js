@@ -1070,6 +1070,20 @@ function toE164DigitsRD(phoneDigits) {
   return d;
 }
 
+function buildPhoneVariants(raw) {
+  const d = normalizePhoneDigits(raw);
+  if (!d) return [];
+
+  const set = new Set([d]);
+  const e164 = toE164DigitsRD(d);
+  if (e164) set.add(e164);
+
+  if (d.length === 11 && d.startsWith("1")) set.add(d.slice(1));
+  if (d.length === 10) set.add("1" + d);
+
+  return Array.from(set).filter(Boolean);
+}
+
 function waRowTitle(title, max = 24) {
   const clean = String(title || "").replace(/\s+/g, " ").trim();
   if (!clean) return "";
@@ -1090,6 +1104,38 @@ function serviceLineRowTitle(service) {
   };
 
   return waRowTitle(map[service?.key] || service?.title || "");
+}
+
+function matchesOriginText(textNorm, label) {
+  const v = normalizeText(label);
+  const variants = [
+    v,
+    `desde ${v}`,
+    `salgo de ${v}`,
+    `salimos de ${v}`,
+    `origen ${v}`,
+    `salida ${v}`,
+    `voy desde ${v}`,
+    `me voy desde ${v}`,
+    `quiero salir desde ${v}`,
+  ];
+
+  return variants.includes(textNorm);
+}
+
+function matchesCategoryText(textNorm, label) {
+  const v = normalizeText(label);
+  const variants = [
+    v,
+    `ver ${v}`,
+    `quiero ${v}`,
+    `categoria ${v}`,
+    `categoría ${v}`,
+    `ver categoria ${v}`,
+    `ver categoría ${v}`,
+  ];
+
+  return variants.includes(textNorm);
 }
 
 function detectCatalogRequest(textNorm) {
@@ -1193,13 +1239,12 @@ function detectOriginKeyFromUser(text) {
   if (TOUR_ORIGIN_ID_TO_KEY[text]) return TOUR_ORIGIN_ID_TO_KEY[text];
 
   for (const o of TOUR_ORIGINS) {
-    const norm = normalizeText(o.title);
-    if (t === norm || t.includes(norm)) return o.key;
+    if (matchesOriginText(t, o.title)) return o.key;
   }
 
-  if (t.includes("santo domingo")) return "santo_domingo";
-  if (t.includes("punta cana") || t.includes("bavaro") || t.includes("bávaro")) return "punta_cana";
-  if (t.includes("las terrenas")) return "las_terrenas";
+  if (matchesOriginText(t, "bavaro") || matchesOriginText(t, "bávaro")) {
+    return "punta_cana";
+  }
 
   return null;
 }
@@ -1226,15 +1271,40 @@ function detectCategoryKeyFromUser(text) {
   const t = normalizeText(text);
   if (CATEGORY_ID_TO_KEY[text]) return CATEGORY_ID_TO_KEY[text];
 
-  if (t.includes("tour diario") || t.includes("tours diarios")) return "tours_diarios";
-  if (t.includes("playa") || t.includes("isla")) return "playas";
-  if (t.includes("montana") || t.includes("montaña") || t.includes("jarabacoa")) return "montanas";
-  if (t.includes("especial")) return "excursiones_especiales";
-  if (t.includes("temporada") || t.includes("paquete")) return "paquetes_temporada";
+  if (matchesCategoryText(t, "Tours diarios") || matchesCategoryText(t, "Tour diario")) {
+    return "tours_diarios";
+  }
+
+  if (matchesCategoryText(t, "Playas") || matchesCategoryText(t, "Playa")) {
+    return "playas";
+  }
+
+  if (
+    matchesCategoryText(t, "Montañas") ||
+    matchesCategoryText(t, "Montana") ||
+    matchesCategoryText(t, "Montaña")
+  ) {
+    return "montanas";
+  }
+
+  if (
+    matchesCategoryText(t, "Excursiones especiales") ||
+    matchesCategoryText(t, "Excursion especial") ||
+    matchesCategoryText(t, "Excursión especial")
+  ) {
+    return "excursiones_especiales";
+  }
+
+  if (
+    matchesCategoryText(t, "Paquetes de temporada") ||
+    matchesCategoryText(t, "Paquete de temporada")
+  ) {
+    return "paquetes_temporada";
+  }
 
   for (const c of TOUR_CATEGORIES) {
     const n = normalizeText(c.title);
-    if (t === n || t.includes(n)) return c.key;
+    if (t === n) return c.key;
   }
 
   return null;
@@ -2095,8 +2165,8 @@ async function handoffToHumanTool({ summary }) {
 
 async function findUpcomingReservationByPhone(phone, windowDays = 180) {
   try {
-    const phoneDigits = String(phone || "").replace(/[^\d]/g, "");
-    if (!phoneDigits) return null;
+    const incomingVariants = new Set(buildPhoneVariants(phone));
+    if (!incomingVariants.size) return null;
 
     const calendar = getCalendarClient();
     const now = new Date();
@@ -2108,8 +2178,13 @@ async function findUpcomingReservationByPhone(phone, windowDays = 180) {
       const priv = ev.extendedProperties?.private || {};
       if (priv.status === "cancelled") continue;
 
-      const wa = String(priv.wa_phone || "").replace(/[^\d]/g, "");
-      if (!wa || wa !== phoneDigits) continue;
+      const storedVariants = new Set([
+        ...buildPhoneVariants(priv.wa_phone),
+        ...buildPhoneVariants(priv.wa_id),
+      ]);
+
+      const matches = Array.from(storedVariants).some((v) => incomingVariants.has(v));
+      if (!matches) continue;
 
       const start = ev.start?.dateTime;
       const endDT = ev.end?.dateTime;
@@ -2121,7 +2196,7 @@ async function findUpcomingReservationByPhone(phone, windowDays = 180) {
         end: endDT,
         tour_key: String(priv.tour_key || "").trim() || inferTourFromSummary(ev.summary || ""),
         passenger_name: String(priv.passenger_name || "").trim() || "",
-        phone: phoneDigits,
+        phone: normalizePhoneDigits(priv.wa_phone || phone),
         adults: Number(priv.adults || 0),
         children: Number(priv.children || 0),
         city: String(priv.city || "").trim() || "",
@@ -2376,6 +2451,15 @@ function tryPickSlotFromUserText(session, userText) {
 // OpenAI fallback
 // =========================
 async function callOpenAI({ session, userText, userPhone, extraSystem = "" }) {
+  if (!OPENAI_API_KEY) {
+    const fallback = session?.pendingTour
+      ? `Puedo seguir sin IA ✅\n\nDime la *fecha* o el *día* que te interesa para ese tour.\nEj: "mañana", "viernes", "14 de junio" o "en julio".`
+      : `Puedo ayudarte con *Tours en República Dominicana*, *Boletos aéreos*, *Solo hoteles*, *Seguros de viaje*, *Traslados* y *Paquetes vacacionales*.\n\nEscribe *"menú"* para ver las opciones.`;
+
+    session.messages.push({ role: "assistant", content: fallback });
+    return fallback;
+  }
+
   const today = new Date();
   const tzParts = getZonedParts(today, BUSINESS_TIMEZONE);
   const todayStr = `${tzParts.year}-${String(tzParts.month).padStart(2, "0")}-${String(tzParts.day).padStart(2, "0")}`;
@@ -3786,23 +3870,9 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
-    const categoryKey = detectCategoryKeyFromUser(userText);
-    if (categoryKey) {
-      session.pendingServiceLine = "tours_rd";
-      session.pendingCategory = categoryKey;
-      updateLead(session, { tour_key: session.pendingTour || "" });
-      await sendToursListByCategory(from, categoryKey);
-      return res.sendStatus(200);
-    }
-
-    const originKey = detectOriginKeyFromUser(userText);
-    if (originKey && !session.pendingTour) {
-      session.pendingServiceLine = "tours_rd";
-      session.pendingOrigin = originKey;
-      await sendToursListByOrigin(from, originKey);
-      return res.sendStatus(200);
-    }
-
+    // =========================
+    // TOUR ESPECÍFICO PRIMERO
+    // =========================
     const directDetectedTour = detectTourKeyFromUser(userText);
     if (directDetectedTour) {
       session.pendingServiceLine = "tours_rd";
@@ -3810,7 +3880,13 @@ app.post("/webhook", async (req, res) => {
       const tour = getTourByKey(directDetectedTour);
       updateLead(session, { tour_key: directDetectedTour });
 
-      if (wantsQuote(tNorm) || wantsIncludes(tNorm) || wantsSchedule(tNorm) || wantsPayments(tNorm) || wantsPolicies(tNorm)) {
+      if (
+        wantsQuote(tNorm) ||
+        wantsIncludes(tNorm) ||
+        wantsSchedule(tNorm) ||
+        wantsPayments(tNorm) ||
+        wantsPolicies(tNorm)
+      ) {
         await sendWhatsAppText(from, buildTourFaqReply(tour, tNorm));
         return res.sendStatus(200);
       }
@@ -3825,9 +3901,17 @@ app.post("/webhook", async (req, res) => {
         return res.sendStatus(200);
       }
 
-      const slots = await getAvailableSlotsTool({ tour_key: directDetectedTour, from: range.from, to: range.to });
+      const slots = await getAvailableSlotsTool({
+        tour_key: directDetectedTour,
+        from: range.from,
+        to: range.to,
+      });
+
       if (!slots.length) {
-        await sendWhatsAppText(from, `No veo salidas disponibles para ese rango 🙏\nDime otro día o mes y te comparto más opciones.`);
+        await sendWhatsAppText(
+          from,
+          `No veo salidas disponibles para ese rango 🙏\nDime otro día o mes y te comparto más opciones.`
+        );
         session.state = "await_day";
         return res.sendStatus(200);
       }
@@ -3840,6 +3924,32 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
+    // =========================
+    // CATEGORÍA
+    // =========================
+    const categoryKey = detectCategoryKeyFromUser(userText);
+    if (categoryKey) {
+      session.pendingServiceLine = "tours_rd";
+      session.pendingCategory = categoryKey;
+      updateLead(session, { tour_key: session.pendingTour || "" });
+      await sendToursListByCategory(from, categoryKey);
+      return res.sendStatus(200);
+    }
+
+    // =========================
+    // ORIGEN
+    // =========================
+    const originKey = detectOriginKeyFromUser(userText);
+    if (originKey && !session.pendingTour) {
+      session.pendingServiceLine = "tours_rd";
+      session.pendingOrigin = originKey;
+      await sendToursListByOrigin(from, originKey);
+      return res.sendStatus(200);
+    }
+
+    // =========================
+    // SERVICIOS
+    // =========================
     const serviceLineKey = detectServiceLineFromUser(userText);
     if (serviceLineKey) {
       clearIntakeFlow(session);
@@ -3921,7 +4031,10 @@ app.post("/webhook", async (req, res) => {
       }
     }
 
-    if (session.pendingTour && (wantsQuote(tNorm) || wantsIncludes(tNorm) || wantsSchedule(tNorm) || wantsPayments(tNorm) || wantsPolicies(tNorm))) {
+    if (
+      session.pendingTour &&
+      (wantsQuote(tNorm) || wantsIncludes(tNorm) || wantsSchedule(tNorm) || wantsPayments(tNorm) || wantsPolicies(tNorm))
+    ) {
       const tour = getTourByKey(session.pendingTour);
       await sendWhatsAppText(from, buildTourFaqReply(tour, tNorm));
       return res.sendStatus(200);
