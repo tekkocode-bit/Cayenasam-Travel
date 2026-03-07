@@ -18,11 +18,16 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
 const GOOGLE_CALENDAR_ID = process.env.GOOGLE_CALENDAR_ID;
 const BUSINESS_NAME =
-  process.env.BUSINESS_NAME || process.env.AGENCY_NAME || process.env.CLINIC_NAME || "Agencia de Tours";
+  process.env.BUSINESS_NAME || process.env.AGENCY_NAME || process.env.CLINIC_NAME || "Cayenasam Travel";
 const BUSINESS_ADDRESS =
-  process.env.BUSINESS_ADDRESS || process.env.CLINIC_ADDRESS || "";
+  process.env.BUSINESS_ADDRESS || process.env.CLINIC_ADDRESS || "Punta Cana, República Dominicana";
 const BUSINESS_TIMEZONE =
   process.env.BUSINESS_TIMEZONE || process.env.CLINIC_TIMEZONE || "America/Santo_Domingo";
+
+const MARKET_CONTACT_TEXT =
+  (process.env.MARKET_CONTACT_TEXT ||
+    "📍 Base operativa: Punta Cana, República Dominicana.\n📲 Escríbenos por este WhatsApp y un asesor te ayuda con tu reserva.")
+    .trim();
 
 const SLOT_STEP_MIN = parseInt(process.env.SLOT_STEP_MIN || "15", 10);
 const MIN_BOOKING_LEAD_MIN = parseInt(process.env.MIN_BOOKING_LEAD_MIN || "120", 10);
@@ -58,11 +63,58 @@ const META_GRAPH_VERSION =
   process.env.WHATSAPP_GRAPH_VERSION || process.env.META_GRAPH_VERSION || "v23.0";
 
 // =========================
+// HELPERS CONFIG
+// =========================
+function safeJson(str, fallback) {
+  try {
+    return JSON.parse(str);
+  } catch {
+    return fallback;
+  }
+}
+
+// =========================
+// MENÚ PRINCIPAL
+// =========================
+const SERVICE_LINES = [
+  { key: "tours_rd", id: "svc_tours_rd", title: "Tours en República Dominicana" },
+  { key: "boletos_aereos", id: "svc_boletos_aereos", title: "Boletos aéreos" },
+  { key: "solo_hoteles", id: "svc_solo_hoteles", title: "Solo hoteles" },
+  { key: "seguros_viaje", id: "svc_seguros_viaje", title: "Seguros de viaje" },
+  { key: "traslados", id: "svc_traslados", title: "Traslados" },
+  { key: "paquetes_vacacionales", id: "svc_paquetes_vacacionales", title: "Paquetes vacacionales" },
+  { key: "hablar_asesor", id: "svc_hablar_asesor", title: "Hablar con un asesor" },
+  { key: "ubicacion_contacto", id: "svc_ubicacion_contacto", title: "Ubicación y contacto" },
+  { key: "catalogo_pdf", id: "svc_catalogo_pdf", title: "Catálogo PDF" },
+];
+
+const SERVICE_LINE_ID_TO_KEY = Object.fromEntries(SERVICE_LINES.map((s) => [s.id, s.key]));
+
+const TOUR_ORIGINS = [
+  { key: "santo_domingo", id: "org_santo_domingo", title: "Santo Domingo" },
+  { key: "punta_cana", id: "org_punta_cana", title: "Punta Cana" },
+  { key: "las_terrenas", id: "org_las_terrenas", title: "Las Terrenas" },
+];
+
+const TOUR_ORIGIN_ID_TO_KEY = Object.fromEntries(TOUR_ORIGINS.map((o) => [o.id, o.key]));
+
+const PACKAGE_DESTINATIONS = [
+  { key: "peru", id: "pkg_peru", title: "Perú" },
+  { key: "bogota", id: "pkg_bogota", title: "Bogotá" },
+  { key: "miami", id: "pkg_miami", title: "Miami" },
+  { key: "italia", id: "pkg_italia", title: "Italia" },
+  { key: "otro_destino", id: "pkg_otro_destino", title: "Otro destino" },
+];
+
+const PACKAGE_DESTINATION_ID_TO_KEY = Object.fromEntries(PACKAGE_DESTINATIONS.map((p) => [p.id, p.key]));
+
+// =========================
 // REDIS
 // =========================
 const REDIS_URL_RAW = (process.env.REDIS_URL || "").trim();
 const SESSION_TTL_SEC = parseInt(process.env.SESSION_TTL_SEC || String(60 * 60 * 24 * 14), 10);
-const SESSION_PREFIX = process.env.SESSION_PREFIX || "tekko:tour:sess:";
+const SESSION_PREFIX =
+  process.env.SESSION_PREFIX || "tekko:travel:rd:sess:";
 
 function normalizeRedisUrl(url) {
   const u = String(url || "").trim();
@@ -118,6 +170,12 @@ function defaultSession() {
     pendingTravelEndDateText: null,
     pendingPassengers: null,
     pendingNotes: null,
+    pendingTripDays: null,
+    pendingTravelerAgesText: null,
+    pendingHotelStars: null,
+    pendingNights: null,
+    pendingTransferRoute: null,
+    pendingAdvisorTopic: null,
 
     lastBooking: null,
     greeted: false,
@@ -178,24 +236,42 @@ function sanitizeSession(session) {
   if (typeof session.state !== "string") session.state = "idle";
   if (typeof session.greeted !== "boolean") session.greeted = false;
 
-  if (typeof session.pendingServiceLine !== "string" && session.pendingServiceLine !== null) session.pendingServiceLine = null;
-  if (typeof session.pendingOrigin !== "string" && session.pendingOrigin !== null) session.pendingOrigin = null;
-  if (typeof session.pendingCategory !== "string" && session.pendingCategory !== null) session.pendingCategory = null;
-  if (typeof session.pendingTour !== "string" && session.pendingTour !== null) session.pendingTour = null;
+  const maybeStringOrNull = [
+    "pendingServiceLine",
+    "pendingOrigin",
+    "pendingCategory",
+    "pendingTour",
+    "pendingPickup",
+    "pendingCity",
+    "pendingName",
+    "pendingDestination",
+    "pendingDepartureCity",
+    "pendingTravelDateText",
+    "pendingTravelEndDateText",
+    "pendingNotes",
+    "pendingTravelerAgesText",
+    "pendingHotelStars",
+    "pendingTransferRoute",
+    "pendingAdvisorTopic",
+  ];
+
+  for (const k of maybeStringOrNull) {
+    if (typeof session[k] !== "string" && session[k] !== null) session[k] = null;
+  }
+
+  const maybeNumberOrNull = [
+    "pendingAdults",
+    "pendingChildren",
+    "pendingPassengers",
+    "pendingTripDays",
+    "pendingNights",
+  ];
+
+  for (const k of maybeNumberOrNull) {
+    if (typeof session[k] !== "number" && session[k] !== null) session[k] = null;
+  }
+
   if (typeof session.pendingRange !== "object" && session.pendingRange !== null) session.pendingRange = null;
-
-  if (typeof session.pendingAdults !== "number" && session.pendingAdults !== null) session.pendingAdults = null;
-  if (typeof session.pendingChildren !== "number" && session.pendingChildren !== null) session.pendingChildren = null;
-  if (typeof session.pendingPickup !== "string" && session.pendingPickup !== null) session.pendingPickup = null;
-  if (typeof session.pendingCity !== "string" && session.pendingCity !== null) session.pendingCity = null;
-  if (typeof session.pendingName !== "string" && session.pendingName !== null) session.pendingName = null;
-
-  if (typeof session.pendingDestination !== "string" && session.pendingDestination !== null) session.pendingDestination = null;
-  if (typeof session.pendingDepartureCity !== "string" && session.pendingDepartureCity !== null) session.pendingDepartureCity = null;
-  if (typeof session.pendingTravelDateText !== "string" && session.pendingTravelDateText !== null) session.pendingTravelDateText = null;
-  if (typeof session.pendingTravelEndDateText !== "string" && session.pendingTravelEndDateText !== null) session.pendingTravelEndDateText = null;
-  if (typeof session.pendingPassengers !== "number" && session.pendingPassengers !== null) session.pendingPassengers = null;
-  if (typeof session.pendingNotes !== "string" && session.pendingNotes !== null) session.pendingNotes = null;
 
   return session;
 }
@@ -270,6 +346,12 @@ function clearIntakeFlow(session) {
   session.pendingTravelEndDateText = null;
   session.pendingPassengers = null;
   session.pendingNotes = null;
+  session.pendingTripDays = null;
+  session.pendingTravelerAgesText = null;
+  session.pendingHotelStars = null;
+  session.pendingNights = null;
+  session.pendingTransferRoute = null;
+  session.pendingAdvisorTopic = null;
 }
 
 // =====================================================
@@ -564,325 +646,7 @@ app.use(
 );
 
 // =========================
-// Helpers JSON
-// =========================
-function safeJson(str, fallback) {
-  try {
-    return JSON.parse(str);
-  } catch {
-    return fallback;
-  }
-}
-
-// =========================
-// Menú principal / servicios
-// =========================
-const SERVICE_LINES = [
-  { key: "tours_rd", id: "svc_tours_rd", title: "Tours en RD" },
-  { key: "boletos_aereos", id: "svc_boletos_aereos", title: "Boletos aéreos" },
-  { key: "seguros_viaje", id: "svc_seguros_viaje", title: "Seguros de viaje" },
-  { key: "paquetes_vacacionales", id: "svc_paquetes_vacacionales", title: "Paquetes vacacionales" },
-  { key: "catalogo_pdf", id: "svc_catalogo_pdf", title: "Catálogo PDF" },
-];
-
-const SERVICE_LINE_ID_TO_KEY = Object.fromEntries(SERVICE_LINES.map((s) => [s.id, s.key]));
-
-const TOUR_ORIGINS = [
-  { key: "santo_domingo", id: "org_santo_domingo", title: "Santo Domingo" },
-  { key: "punta_cana", id: "org_punta_cana", title: "Punta Cana" },
-  { key: "las_terrenas", id: "org_las_terrenas", title: "Las Terrenas" },
-];
-
-const TOUR_ORIGIN_ID_TO_KEY = Object.fromEntries(TOUR_ORIGINS.map((o) => [o.id, o.key]));
-
-const PACKAGE_DESTINATIONS = [
-  { key: "peru", id: "pkg_peru", title: "Perú" },
-  { key: "bogota", id: "pkg_bogota", title: "Bogotá" },
-  { key: "miami", id: "pkg_miami", title: "Miami" },
-  { key: "italia", id: "pkg_italia", title: "Italia" },
-  { key: "otro_destino", id: "pkg_otro_destino", title: "Otro destino" },
-];
-
-const PACKAGE_DESTINATION_ID_TO_KEY = Object.fromEntries(PACKAGE_DESTINATIONS.map((p) => [p.id, p.key]));
-
-function getServiceLineByKey(key) {
-  return SERVICE_LINES.find((s) => s.key === key) || null;
-}
-
-function getOriginByKey(key) {
-  return TOUR_ORIGINS.find((o) => o.key === key) || null;
-}
-
-function getPackageDestinationByKey(key) {
-  return PACKAGE_DESTINATIONS.find((p) => p.key === key) || null;
-}
-
-function mainMenuText() {
-  return (
-    `👋 ¡Hola! Soy el asistente de *${BUSINESS_NAME}*.\n\n` +
-    `Puedo ayudarte con:\n` +
-    `🌴 Tours en RD\n` +
-    `✈️ Boletos aéreos\n` +
-    `🛡️ Seguros de viaje\n` +
-    `🎒 Paquetes vacacionales\n` +
-    `📄 Catálogo PDF\n\n` +
-    `Elige una opción del menú o escríbeme directamente lo que buscas.`
-  );
-}
-
-async function sendServiceLinesList(to) {
-  const url = `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`;
-  const rows = SERVICE_LINES.map((s) => ({ id: s.id, title: s.title, description: "" }));
-
-  await axios.post(
-    url,
-    {
-      messaging_product: "whatsapp",
-      to,
-      type: "interactive",
-      interactive: {
-        type: "list",
-        header: { type: "text", text: "Servicios disponibles" },
-        body: { text: "Selecciona el servicio que te interesa 👇" },
-        footer: { text: BUSINESS_NAME },
-        action: { button: "Ver opciones", sections: [{ title: "Servicios", rows }] },
-      },
-    },
-    { headers: { Authorization: `Bearer ${WA_TOKEN}` } }
-  );
-
-  const rendered =
-    `*Servicios disponibles*\nSelecciona el servicio que te interesa 👇\n\n` +
-    rows.map((r) => `• [${r.id}] ${r.title}`).join("\n");
-
-  await bothubReportMessage({
-    direction: "OUTBOUND",
-    to: String(to),
-    body: rendered,
-    source: "BOT",
-    kind: "LIST",
-    meta: { rows },
-  });
-}
-
-async function sendTourOriginsList(to) {
-  const url = `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`;
-  const rows = TOUR_ORIGINS.map((o) => ({ id: o.id, title: o.title, description: "" }));
-
-  await axios.post(
-    url,
-    {
-      messaging_product: "whatsapp",
-      to,
-      type: "interactive",
-      interactive: {
-        type: "list",
-        header: { type: "text", text: "Origen del tour" },
-        body: { text: "¿Desde dónde deseas salir? 👇" },
-        footer: { text: BUSINESS_NAME },
-        action: { button: "Elegir origen", sections: [{ title: "Salidas", rows }] },
-      },
-    },
-    { headers: { Authorization: `Bearer ${WA_TOKEN}` } }
-  );
-
-  const rendered =
-    `*Origen del tour*\n¿Desde dónde deseas salir? 👇\n\n` +
-    rows.map((r) => `• [${r.id}] ${r.title}`).join("\n");
-
-  await bothubReportMessage({
-    direction: "OUTBOUND",
-    to: String(to),
-    body: rendered,
-    source: "BOT",
-    kind: "LIST",
-    meta: { rows },
-  });
-}
-
-async function sendPackageDestinationsList(to) {
-  const url = `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`;
-  const rows = PACKAGE_DESTINATIONS.map((d) => ({ id: d.id, title: d.title, description: "" }));
-
-  await axios.post(
-    url,
-    {
-      messaging_product: "whatsapp",
-      to,
-      type: "interactive",
-      interactive: {
-        type: "list",
-        header: { type: "text", text: "Paquetes vacacionales" },
-        body: { text: "Elige el destino que te interesa 👇" },
-        footer: { text: BUSINESS_NAME },
-        action: { button: "Ver destinos", sections: [{ title: "Destinos", rows }] },
-      },
-    },
-    { headers: { Authorization: `Bearer ${WA_TOKEN}` } }
-  );
-
-  const rendered =
-    `*Paquetes vacacionales*\nElige el destino que te interesa 👇\n\n` +
-    rows.map((r) => `• [${r.id}] ${r.title}`).join("\n");
-
-  await bothubReportMessage({
-    direction: "OUTBOUND",
-    to: String(to),
-    body: rendered,
-    source: "BOT",
-    kind: "LIST",
-    meta: { rows },
-  });
-}
-
-async function sendWhatsAppDocument(to, documentUrl, filename, caption = "", reportSource = "BOT") {
-  if (!documentUrl) {
-    throw new Error("documentUrl is required");
-  }
-
-  const url = `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`;
-  await axios.post(
-    url,
-    {
-      messaging_product: "whatsapp",
-      to,
-      type: "document",
-      document: {
-        link: documentUrl,
-        filename: filename || undefined,
-        caption: caption || undefined,
-      },
-    },
-    { headers: { Authorization: `Bearer ${WA_TOKEN}` } }
-  );
-
-  await bothubReportMessage({
-    direction: "OUTBOUND",
-    to: String(to),
-    body: caption || filename || "Documento enviado",
-    source: reportSource,
-    kind: "DOCUMENT",
-    meta: {
-      filename: filename || undefined,
-      link: documentUrl,
-    },
-  });
-}
-
-async function sendCatalogDocument(to) {
-  if (!CATALOG_DOCUMENT_URL) {
-    await sendWhatsAppText(
-      to,
-      `Todavía no tengo el documento cargado aquí 🙏\n\nMientras tanto, dime si buscas *Tours en RD*, *Boletos aéreos*, *Seguros de viaje* o *Paquetes vacacionales* y te ayudo por el flujo normal.`
-    );
-    return;
-  }
-
-  await sendWhatsAppDocument(
-    to,
-    CATALOG_DOCUMENT_URL,
-    CATALOG_DOCUMENT_FILENAME,
-    CATALOG_DOCUMENT_CAPTION,
-    "BOT"
-  );
-}
-
-function detectCatalogRequest(textNorm) {
-  const t = textNorm || "";
-  return (
-    t.includes("catalogo") ||
-    t.includes("catálogo") ||
-    t.includes("pdf") ||
-    t.includes("brochure") ||
-    t.includes("documento")
-  );
-}
-
-function detectServiceLineFromUser(text) {
-  const t = normalizeText(text);
-
-  if (SERVICE_LINE_ID_TO_KEY[text]) return SERVICE_LINE_ID_TO_KEY[text];
-
-  if (
-    t.includes("tour") ||
-    t.includes("excursion") ||
-    t.includes("excursión") ||
-    t.includes("playa") ||
-    t.includes("isla") ||
-    t.includes("buggies") ||
-    t.includes("jarabacoa") ||
-    t.includes("santo domingo") ||
-    t.includes("samaná") ||
-    t.includes("samana")
-  ) {
-    return "tours_rd";
-  }
-
-  if (
-    t.includes("boleto") ||
-    t.includes("vuelo") ||
-    t.includes("vuelos") ||
-    t.includes("aereo") ||
-    t.includes("aéreo") ||
-    t.includes("aerolinea") ||
-    t.includes("aerolínea")
-  ) {
-    return "boletos_aereos";
-  }
-
-  if (
-    t.includes("seguro de viaje") ||
-    t.includes("seguros de viaje") ||
-    t.includes("seguro") ||
-    t.includes("asistencia de viaje")
-  ) {
-    return "seguros_viaje";
-  }
-
-  if (
-    t.includes("paquete vacacional") ||
-    t.includes("paquetes vacacionales") ||
-    t.includes("paquete") ||
-    t.includes("paquetes")
-  ) {
-    return "paquetes_vacacionales";
-  }
-
-  if (detectCatalogRequest(t)) return "catalogo_pdf";
-
-  return null;
-}
-
-function detectOriginKeyFromUser(text) {
-  const t = normalizeText(text);
-  if (TOUR_ORIGIN_ID_TO_KEY[text]) return TOUR_ORIGIN_ID_TO_KEY[text];
-
-  if (t.includes("santo domingo")) return "santo_domingo";
-  if (t.includes("punta cana") || t.includes("bavaro") || t.includes("bávaro")) return "punta_cana";
-  if (t.includes("las terrenas")) return "las_terrenas";
-
-  return null;
-}
-
-function detectPackageDestinationKeyFromUser(text) {
-  const t = normalizeText(text);
-  if (PACKAGE_DESTINATION_ID_TO_KEY[text]) return PACKAGE_DESTINATION_ID_TO_KEY[text];
-
-  if (t.includes("peru") || t.includes("perú")) return "peru";
-  if (t.includes("bogota") || t.includes("bogotá")) return "bogota";
-  if (t.includes("miami")) return "miami";
-  if (t.includes("italia")) return "italia";
-  if (t.includes("otro destino")) return "otro_destino";
-
-  return null;
-}
-
-function serviceLineLabel(key) {
-  return getServiceLineByKey(key)?.title || key || "Servicio";
-}
-
-// =========================
-// Tours / categories
+// TOURS RD
 // =========================
 const TOUR_CATEGORIES = [
   { key: "tours_diarios", id: "cat_tours_diarios", title: "Tours diarios" },
@@ -1058,6 +822,18 @@ function defaultTourCatalog() {
 const TOURS = safeJson(process.env.TOUR_CATALOG_JSON, null) || defaultTourCatalog();
 const TOUR_ID_TO_KEY = Object.fromEntries(TOURS.map((t) => [t.id, t.key]));
 
+function getServiceLineByKey(key) {
+  return SERVICE_LINES.find((s) => s.key === key) || null;
+}
+
+function getOriginByKey(key) {
+  return TOUR_ORIGINS.find((o) => o.key === key) || null;
+}
+
+function getPackageDestinationByKey(key) {
+  return PACKAGE_DESTINATIONS.find((p) => p.key === key) || null;
+}
+
 function getCategoryByKey(key) {
   return TOUR_CATEGORIES.find((c) => c.key === key) || null;
 }
@@ -1138,7 +914,9 @@ function isGreeting(textNorm) {
     t.includes("montaña") ||
     t.includes("boleto") ||
     t.includes("vuelo") ||
-    t.includes("seguro");
+    t.includes("seguro") ||
+    t.includes("hotel") ||
+    t.includes("traslado");
 
   return isOnlyGreeting && !hasTravelIntent && t.length <= 40;
 }
@@ -1146,7 +924,7 @@ function isGreeting(textNorm) {
 function quickHelpText() {
   return (
     `¡Hola! 😊\n` +
-    `Puedo ayudarte con *Tours en RD*, *Boletos aéreos*, *Seguros de viaje* y *Paquetes vacacionales*.\n\n` +
+    `Puedo ayudarte con *Tours en República Dominicana*, *Boletos aéreos*, *Solo hoteles*, *Seguros de viaje*, *Traslados* y *Paquetes vacacionales*.\n\n` +
     `Escribe *"menú"* para ver las opciones.`
   );
 }
@@ -1277,6 +1055,10 @@ function getNowPlusLeadUTC() {
   return addMinutes(now, lead);
 }
 
+function currency(n) {
+  return `${PRICE_CURRENCY}${Number(n || 0).toFixed(0)}`;
+}
+
 function normalizePhoneDigits(raw) {
   return String(raw || "").replace(/[^\d]/g, "");
 }
@@ -1288,6 +1070,334 @@ function toE164DigitsRD(phoneDigits) {
   return d;
 }
 
+function detectCatalogRequest(textNorm) {
+  const t = textNorm || "";
+  return (
+    t.includes("catalogo") ||
+    t.includes("catálogo") ||
+    t.includes("pdf") ||
+    t.includes("brochure") ||
+    t.includes("documento")
+  );
+}
+
+function detectServiceLineFromUser(text) {
+  const t = normalizeText(text);
+
+  if (SERVICE_LINE_ID_TO_KEY[text]) return SERVICE_LINE_ID_TO_KEY[text];
+
+  if (
+    t.includes("tour") ||
+    t.includes("excursion") ||
+    t.includes("excursión") ||
+    t.includes("playa") ||
+    t.includes("isla") ||
+    t.includes("buggies") ||
+    t.includes("jarabacoa") ||
+    t.includes("santo domingo") ||
+    t.includes("samana") ||
+    t.includes("samaná") ||
+    t.includes("punta cana")
+  ) {
+    return "tours_rd";
+  }
+
+  if (
+    t.includes("boleto") ||
+    t.includes("vuelo") ||
+    t.includes("vuelos") ||
+    t.includes("aereo") ||
+    t.includes("aéreo") ||
+    t.includes("aerolinea") ||
+    t.includes("aerolínea")
+  ) {
+    return "boletos_aereos";
+  }
+
+  if (t.includes("hotel") || t.includes("hospedaje") || t.includes("alojamiento")) {
+    return "solo_hoteles";
+  }
+
+  if (
+    t.includes("seguro de viaje") ||
+    t.includes("seguros de viaje") ||
+    t.includes("seguro") ||
+    t.includes("asistencia de viaje")
+  ) {
+    return "seguros_viaje";
+  }
+
+  if (
+    t.includes("traslado") ||
+    t.includes("traslados") ||
+    t.includes("aeropuerto") ||
+    t.includes("transfer")
+  ) {
+    return "traslados";
+  }
+
+  if (
+    t.includes("paquete vacacional") ||
+    t.includes("paquetes vacacionales") ||
+    t.includes("paquete") ||
+    t.includes("paquetes")
+  ) {
+    return "paquetes_vacacionales";
+  }
+
+  if (
+    t.includes("asesor") ||
+    t.includes("agente") ||
+    t.includes("humano") ||
+    t.includes("persona")
+  ) {
+    return "hablar_asesor";
+  }
+
+  if (
+    t.includes("ubicacion") ||
+    t.includes("ubicación") ||
+    t.includes("direccion") ||
+    t.includes("dirección") ||
+    t.includes("contacto") ||
+    t.includes("oficina")
+  ) {
+    return "ubicacion_contacto";
+  }
+
+  if (detectCatalogRequest(t)) return "catalogo_pdf";
+
+  return null;
+}
+
+function detectOriginKeyFromUser(text) {
+  const t = normalizeText(text);
+  if (TOUR_ORIGIN_ID_TO_KEY[text]) return TOUR_ORIGIN_ID_TO_KEY[text];
+
+  for (const o of TOUR_ORIGINS) {
+    const norm = normalizeText(o.title);
+    if (t === norm || t.includes(norm)) return o.key;
+  }
+
+  if (t.includes("santo domingo")) return "santo_domingo";
+  if (t.includes("punta cana") || t.includes("bavaro") || t.includes("bávaro")) return "punta_cana";
+  if (t.includes("las terrenas")) return "las_terrenas";
+
+  return null;
+}
+
+function detectPackageDestinationKeyFromUser(text) {
+  const t = normalizeText(text);
+  if (PACKAGE_DESTINATION_ID_TO_KEY[text]) return PACKAGE_DESTINATION_ID_TO_KEY[text];
+
+  for (const p of PACKAGE_DESTINATIONS) {
+    const norm = normalizeText(p.title);
+    if (t === norm || t.includes(norm)) return p.key;
+  }
+
+  if (t.includes("peru") || t.includes("perú")) return "peru";
+  if (t.includes("bogota") || t.includes("bogotá")) return "bogota";
+  if (t.includes("miami")) return "miami";
+  if (t.includes("italia")) return "italia";
+  if (t.includes("otro destino")) return "otro_destino";
+
+  return null;
+}
+
+function detectTourKeyFromUser(text) {
+  const t = normalizeText(text);
+  if (TOUR_ID_TO_KEY[text]) return TOUR_ID_TO_KEY[text];
+
+  for (const tour of TOURS) {
+    const nt = normalizeText(tour.title);
+    if (t === nt || t.includes(nt)) return tour.key;
+    const keyNorm = normalizeText(tour.key.replace(/_/g, " "));
+    if (t.includes(keyNorm)) return tour.key;
+  }
+
+  if (t.includes("saona")) return "isla_saona";
+  if (t.includes("catalina")) return "isla_catalina";
+  if (t.includes("city tour") || t.includes("zona colonial")) return "city_tour_santo_domingo";
+  if (t.includes("jarabacoa")) return "jarabacoa_aventura";
+  if (t.includes("buggies") || t.includes("macao")) return "buggies_macao";
+  if (t.includes("samana") || t.includes("samaná")) return "samana_temporada";
+
+  return null;
+}
+
+function parsePassengerCount(text) {
+  const t = normalizeText(text);
+  const digits = t.match(/\d+/);
+  if (digits) return parseInt(digits[0], 10);
+
+  const words = {
+    uno: 1,
+    una: 1,
+    dos: 2,
+    tres: 3,
+    cuatro: 4,
+    cinco: 5,
+    seis: 6,
+    siete: 7,
+    ocho: 8,
+    nueve: 9,
+    diez: 10,
+    ninguno: 0,
+    ningun: 0,
+    ningún: 0,
+    cero: 0,
+  };
+
+  for (const [k, v] of Object.entries(words)) {
+    if (t === k || t.includes(` ${k}`) || t.startsWith(k + " ")) return v;
+  }
+
+  return null;
+}
+
+function buildTourInfoText(tour) {
+  if (!tour) return "";
+
+  return (
+    `🌴 *${tour.title}*\n` +
+    `${tour.description}\n\n` +
+    `💵 Desde *${currency(tour.basePriceAdult)}* adultos y *${currency(tour.basePriceChild)}* niños\n` +
+    `⏳ Duración: ${tour.durationLabel}\n` +
+    `📍 Punto de encuentro: ${tour.meetingPoint}\n` +
+    `🚐 Salida / pickup: ${tour.pickupOptions}\n` +
+    `✅ Incluye: ${Array.isArray(tour.includes) ? tour.includes.join(", ") : String(tour.includes || "Consultar")}\n` +
+    `💳 Pago: ${tour.paymentMethods}\n` +
+    `📌 Reserva: ${tour.reservationPolicy}\n\n` +
+    `Si deseas el documento informativo, escribe *catálogo*.`
+  );
+}
+
+function buildTourFaqReply(tour, textNorm) {
+  if (!tour) return "";
+
+  const parts = [`🌴 *${tour.title}*`];
+
+  if (wantsQuote(textNorm)) {
+    parts.push(`💵 Precio base: Adultos *${currency(tour.basePriceAdult)}* / Niños *${currency(tour.basePriceChild)}*`);
+  }
+
+  if (wantsIncludes(textNorm)) {
+    parts.push(`✅ Incluye: ${Array.isArray(tour.includes) ? tour.includes.join(", ") : String(tour.includes || "Consultar")}`);
+  }
+
+  if (wantsSchedule(textNorm)) {
+    parts.push(`📍 Punto de encuentro: ${tour.meetingPoint}`);
+    parts.push(`🚐 Pickup / salida: ${tour.pickupOptions}`);
+    parts.push(`⏳ Duración aproximada: ${tour.durationLabel}`);
+  }
+
+  if (wantsPayments(textNorm)) {
+    parts.push(`💳 Formas de pago: ${tour.paymentMethods}`);
+    parts.push(`🧾 Política de pago: ${tour.paymentPolicy}`);
+  }
+
+  if (wantsPolicies(textNorm)) {
+    parts.push(`📌 Política de reserva: ${tour.reservationPolicy}`);
+    parts.push(`🧾 Política de pago: ${tour.paymentPolicy}`);
+  }
+
+  if (parts.length === 1) {
+    parts.push(buildTourInfoText(tour));
+  }
+
+  parts.push(`\nSi deseas, dime la fecha y te comparto disponibilidad real.`);
+  return parts.join("\n");
+}
+
+function buildQuotePreview(tour, adults, children) {
+  const a = Number(adults || 0);
+  const c = Number(children || 0);
+  const total = a * Number(tour?.basePriceAdult || 0) + c * Number(tour?.basePriceChild || 0);
+
+  return (
+    `💵 *Cotización estimada*\n` +
+    `Tour: *${tour?.title || "—"}*\n` +
+    `Adultos: ${a} x ${currency(tour?.basePriceAdult || 0)}\n` +
+    `Niños: ${c} x ${currency(tour?.basePriceChild || 0)}\n` +
+    `Total estimado: *${currency(total)}*\n\n` +
+    `*Incluye:* ${Array.isArray(tour?.includes) ? tour.includes.join(", ") : String(tour?.includes || "Consultar")}\n` +
+    `*Pago:* ${tour?.paymentMethods || "Consultar"}`
+  );
+}
+
+function updateLead(session, patch = {}) {
+  session.lead = {
+    ...defaultLead(),
+    ...(session.lead || {}),
+    ...patch,
+    lastInteractionAt: new Date().toISOString(),
+  };
+}
+
+function clearLeadOnBooking(session) {
+  session.lead = {
+    ...defaultLead(),
+    tour_key: session.pendingTour || session.lead?.tour_key || "",
+    converted: true,
+    followupSent: true,
+    lastInteractionAt: new Date().toISOString(),
+  };
+}
+
+function buildLeadSummary(title, fields = []) {
+  const lines = [`📌 *${title}*`, ""];
+  for (const f of fields) {
+    lines.push(`${f.label}: ${f.value || "—"}`);
+  }
+  return lines.join("\n");
+}
+
+function serviceLineLabel(key) {
+  return getServiceLineByKey(key)?.title || key || "Servicio";
+}
+
+function categoriesEmojiText() {
+  return (
+    `🌴 *Tours en República Dominicana*\n\n` +
+    `Puedo mostrarte opciones por categoría:\n` +
+    `🏙️ Tours diarios\n` +
+    `🏝️ Playas\n` +
+    `⛰️ Montañas\n` +
+    `✨ Excursiones especiales\n` +
+    `🎒 Paquetes de temporada\n\n` +
+    `O si prefieres, primero elige tu *origen de salida* y te muestro los tours disponibles.`
+  );
+}
+
+function mainMenuText() {
+  return (
+    `👋 ¡Hola! Soy el asistente de *${BUSINESS_NAME}*.\n\n` +
+    `Puedo ayudarte con:\n` +
+    `🌴 Tours en República Dominicana\n` +
+    `✈️ Boletos aéreos\n` +
+    `🏨 Solo hoteles\n` +
+    `🛡️ Seguros de viaje\n` +
+    `🚕 Traslados\n` +
+    `🎒 Paquetes vacacionales\n` +
+    `👤 Hablar con un asesor\n` +
+    `📍 Ubicación y contacto\n` +
+    `📄 Catálogo PDF\n\n` +
+    `Elige una opción del menú o escríbeme directamente lo que buscas.`
+  );
+}
+
+function buildLocationContactText() {
+  const addressLine = BUSINESS_ADDRESS ? `📍 Dirección: ${BUSINESS_ADDRESS}\n` : "";
+  return (
+    `📍 *Ubicación y contacto*\n\n` +
+    `${addressLine}` +
+    `${MARKET_CONTACT_TEXT}`
+  ).trim();
+}
+
+// =========================
+// WhatsApp send helpers
+// =========================
 async function sendWhatsAppText(to, text, reportSource = "BOT") {
   const url = `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`;
   await axios.post(
@@ -1302,6 +1412,40 @@ async function sendWhatsAppText(to, text, reportSource = "BOT") {
     body: String(text),
     source: reportSource,
     kind: "TEXT",
+  });
+}
+
+async function sendWhatsAppDocument(to, documentUrl, filename, caption = "", reportSource = "BOT") {
+  if (!documentUrl) {
+    throw new Error("documentUrl is required");
+  }
+
+  const url = `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`;
+  await axios.post(
+    url,
+    {
+      messaging_product: "whatsapp",
+      to,
+      type: "document",
+      document: {
+        link: documentUrl,
+        filename: filename || undefined,
+        caption: caption || undefined,
+      },
+    },
+    { headers: { Authorization: `Bearer ${WA_TOKEN}` } }
+  );
+
+  await bothubReportMessage({
+    direction: "OUTBOUND",
+    to: String(to),
+    body: caption || filename || "Documento enviado",
+    source: reportSource,
+    kind: "DOCUMENT",
+    meta: {
+      filename: filename || undefined,
+      link: documentUrl,
+    },
   });
 }
 
@@ -1333,17 +1477,109 @@ async function sendReminderWhatsAppToBestTarget(priv, fallbackPhoneDigits, text)
   return { ok: false, tried, error: lastErr?.response?.data || lastErr?.message || lastErr };
 }
 
-function categoriesEmojiText() {
-  return (
-    `🌴 *Tours en RD*\n\n` +
-    `Puedo mostrarte opciones por categoría:\n` +
-    `🏙️ Tours diarios\n` +
-    `🏝️ Playas\n` +
-    `⛰️ Montañas\n` +
-    `✨ Excursiones especiales\n` +
-    `🎒 Paquetes de temporada\n\n` +
-    `O si prefieres, primero elige tu *origen de salida* y te muestro los tours disponibles.`
+async function sendServiceLinesList(to) {
+  const url = `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`;
+  const rows = SERVICE_LINES.map((s) => ({ id: s.id, title: s.title, description: "" }));
+
+  await axios.post(
+    url,
+    {
+      messaging_product: "whatsapp",
+      to,
+      type: "interactive",
+      interactive: {
+        type: "list",
+        header: { type: "text", text: "Servicios disponibles" },
+        body: { text: "Selecciona el servicio que te interesa 👇" },
+        footer: { text: BUSINESS_NAME },
+        action: { button: "Ver opciones", sections: [{ title: "Servicios", rows }] },
+      },
+    },
+    { headers: { Authorization: `Bearer ${WA_TOKEN}` } }
   );
+
+  const rendered =
+    `*Servicios disponibles*\nSelecciona el servicio que te interesa 👇\n\n` +
+    rows.map((r) => `• [${r.id}] ${r.title}`).join("\n");
+
+  await bothubReportMessage({
+    direction: "OUTBOUND",
+    to: String(to),
+    body: rendered,
+    source: "BOT",
+    kind: "LIST",
+    meta: { rows },
+  });
+}
+
+async function sendTourOriginsList(to) {
+  const url = `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`;
+  const rows = TOUR_ORIGINS.map((o) => ({ id: o.id, title: o.title, description: "" }));
+
+  await axios.post(
+    url,
+    {
+      messaging_product: "whatsapp",
+      to,
+      type: "interactive",
+      interactive: {
+        type: "list",
+        header: { type: "text", text: "Origen del tour" },
+        body: { text: "¿Desde dónde deseas salir? 👇" },
+        footer: { text: BUSINESS_NAME },
+        action: { button: "Elegir origen", sections: [{ title: "Salidas", rows }] },
+      },
+    },
+    { headers: { Authorization: `Bearer ${WA_TOKEN}` } }
+  );
+
+  const rendered =
+    `*Origen del tour*\n¿Desde dónde deseas salir? 👇\n\n` +
+    rows.map((r) => `• [${r.id}] ${r.title}`).join("\n");
+
+  await bothubReportMessage({
+    direction: "OUTBOUND",
+    to: String(to),
+    body: rendered,
+    source: "BOT",
+    kind: "LIST",
+    meta: { rows },
+  });
+}
+
+async function sendPackageDestinationsList(to) {
+  const url = `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`;
+  const rows = PACKAGE_DESTINATIONS.map((d) => ({ id: d.id, title: d.title, description: "" }));
+
+  await axios.post(
+    url,
+    {
+      messaging_product: "whatsapp",
+      to,
+      type: "interactive",
+      interactive: {
+        type: "list",
+        header: { type: "text", text: "Paquetes vacacionales" },
+        body: { text: "Elige el destino que te interesa 👇" },
+        footer: { text: BUSINESS_NAME },
+        action: { button: "Ver destinos", sections: [{ title: "Destinos", rows }] },
+      },
+    },
+    { headers: { Authorization: `Bearer ${WA_TOKEN}` } }
+  );
+
+  const rendered =
+    `*Paquetes vacacionales*\nElige el destino que te interesa 👇\n\n` +
+    rows.map((r) => `• [${r.id}] ${r.title}`).join("\n");
+
+  await bothubReportMessage({
+    direction: "OUTBOUND",
+    to: String(to),
+    body: rendered,
+    source: "BOT",
+    kind: "LIST",
+    meta: { rows },
+  });
 }
 
 async function sendCategoriesList(to) {
@@ -1475,135 +1711,22 @@ async function sendToursListByOrigin(to, originKey) {
   });
 }
 
-function currency(n) {
-  return `${PRICE_CURRENCY}${Number(n || 0).toFixed(0)}`;
-}
+async function sendCatalogDocument(to) {
+  if (!CATALOG_DOCUMENT_URL) {
+    await sendWhatsAppText(
+      to,
+      `Todavía no tengo el documento cargado aquí 🙏\n\nMientras tanto, dime si buscas *Tours en República Dominicana*, *Boletos aéreos*, *Solo hoteles*, *Seguros de viaje*, *Traslados* o *Paquetes vacacionales* y te ayudo por el flujo normal.`
+    );
+    return;
+  }
 
-function buildTourInfoText(tour) {
-  if (!tour) return "";
-
-  return (
-    `🌴 *${tour.title}*\n` +
-    `${tour.description}\n\n` +
-    `💵 Desde *${currency(tour.basePriceAdult)}* adultos y *${currency(tour.basePriceChild)}* niños\n` +
-    `⏳ Duración: ${tour.durationLabel}\n` +
-    `📍 Punto de encuentro: ${tour.meetingPoint}\n` +
-    `🚐 Salida / pickup: ${tour.pickupOptions}\n` +
-    `✅ Incluye: ${Array.isArray(tour.includes) ? tour.includes.join(", ") : String(tour.includes || "Consultar")}\n` +
-    `💳 Pago: ${tour.paymentMethods}\n` +
-    `📌 Reserva: ${tour.reservationPolicy}\n\n` +
-    `Si deseas el documento informativo, escribe *catálogo*.`
+  await sendWhatsAppDocument(
+    to,
+    CATALOG_DOCUMENT_URL,
+    CATALOG_DOCUMENT_FILENAME,
+    CATALOG_DOCUMENT_CAPTION,
+    "BOT"
   );
-}
-
-function buildTourFaqReply(tour, textNorm) {
-  if (!tour) return "";
-
-  const parts = [`🌴 *${tour.title}*`];
-
-  if (wantsQuote(textNorm)) {
-    parts.push(`💵 Precio base: Adultos *${currency(tour.basePriceAdult)}* / Niños *${currency(tour.basePriceChild)}*`);
-  }
-
-  if (wantsIncludes(textNorm)) {
-    parts.push(`✅ Incluye: ${Array.isArray(tour.includes) ? tour.includes.join(", ") : String(tour.includes || "Consultar")}`);
-  }
-
-  if (wantsSchedule(textNorm)) {
-    parts.push(`📍 Punto de encuentro: ${tour.meetingPoint}`);
-    parts.push(`🚐 Pickup / salida: ${tour.pickupOptions}`);
-    parts.push(`⏳ Duración aproximada: ${tour.durationLabel}`);
-  }
-
-  if (wantsPayments(textNorm)) {
-    parts.push(`💳 Formas de pago: ${tour.paymentMethods}`);
-    parts.push(`🧾 Política de pago: ${tour.paymentPolicy}`);
-  }
-
-  if (wantsPolicies(textNorm)) {
-    parts.push(`📌 Política de reserva: ${tour.reservationPolicy}`);
-    parts.push(`🧾 Política de pago: ${tour.paymentPolicy}`);
-  }
-
-  if (parts.length === 1) {
-    parts.push(buildTourInfoText(tour));
-  }
-
-  parts.push(`\nSi deseas, dime la fecha y te comparto disponibilidad real.`);
-  return parts.join("\n");
-}
-
-function buildQuotePreview(tour, adults, children) {
-  const a = Number(adults || 0);
-  const c = Number(children || 0);
-  const total = a * Number(tour?.basePriceAdult || 0) + c * Number(tour?.basePriceChild || 0);
-
-  return (
-    `💵 *Cotización estimada*\n` +
-    `Tour: *${tour?.title || "—"}*\n` +
-    `Adultos: ${a} x ${currency(tour?.basePriceAdult || 0)}\n` +
-    `Niños: ${c} x ${currency(tour?.basePriceChild || 0)}\n` +
-    `Total estimado: *${currency(total)}*\n\n` +
-    `*Incluye:* ${Array.isArray(tour?.includes) ? tour.includes.join(", ") : String(tour?.includes || "Consultar")}\n` +
-    `*Pago:* ${tour?.paymentMethods || "Consultar"}`
-  );
-}
-
-function updateLead(session, patch = {}) {
-  session.lead = {
-    ...defaultLead(),
-    ...(session.lead || {}),
-    ...patch,
-    lastInteractionAt: new Date().toISOString(),
-  };
-}
-
-function clearLeadOnBooking(session) {
-  session.lead = {
-    ...defaultLead(),
-    tour_key: session.pendingTour || session.lead?.tour_key || "",
-    converted: true,
-    followupSent: true,
-    lastInteractionAt: new Date().toISOString(),
-  };
-}
-
-function buildNonTourLeadSummary({
-  serviceLine,
-  departureCity,
-  destination,
-  travelDateText,
-  passengers,
-  passengerName,
-  phone,
-  notes,
-}) {
-  return (
-    `📌 *Nuevo lead de servicio*\n\n` +
-    `🧩 Servicio: *${serviceLineLabel(serviceLine)}*\n` +
-    `🛫 Salida / origen: ${departureCity || "—"}\n` +
-    `🌍 Destino: ${destination || "—"}\n` +
-    `📅 Fecha / temporada: ${travelDateText || "—"}\n` +
-    `👥 Personas: ${passengers || "—"}\n` +
-    `👤 Cliente: ${passengerName || "—"}\n` +
-    `📞 Tel: ${phone || "—"}\n` +
-    `📝 Notas: ${notes || "—"}`
-  );
-}
-
-async function notifyPersonalWhatsAppLeadSummary(summaryText, customerPhone = "") {
-  try {
-    if (!PERSONAL_WA_TO) return;
-
-    const myTo = String(PERSONAL_WA_TO).replace(/[^\d]/g, "");
-    const leadPhone = String(customerPhone || "").replace(/[^\d]/g, "");
-    if (!myTo) return;
-    if (leadPhone && myTo === leadPhone) return;
-
-    await sendWhatsAppText(myTo, summaryText, "BOT");
-  } catch (e) {
-    console.error("notifyPersonalWhatsAppLeadSummary error:", e?.response?.data || e?.message || e);
-  }
 }
 
 // =========================
@@ -2197,107 +2320,6 @@ function tryPickSlotFromUserText(session, userText) {
   return null;
 }
 
-function detectCategoryKeyFromUser(text) {
-  const t = normalizeText(text);
-  if (CATEGORY_ID_TO_KEY[text]) return CATEGORY_ID_TO_KEY[text];
-
-  if (t.includes("tour diario") || t.includes("tours diarios")) return "tours_diarios";
-  if (t.includes("playa") || t.includes("isla")) return "playas";
-  if (t.includes("montana") || t.includes("montaña") || t.includes("jarabacoa")) return "montanas";
-  if (t.includes("especial")) return "excursiones_especiales";
-  if (t.includes("temporada") || t.includes("paquete")) return "paquetes_temporada";
-
-  for (const c of TOUR_CATEGORIES) {
-    const n = normalizeText(c.title);
-    if (t === n || t.includes(n)) return c.key;
-  }
-
-  return null;
-}
-
-function detectTourKeyFromUser(text) {
-  const t = normalizeText(text);
-  if (TOUR_ID_TO_KEY[text]) return TOUR_ID_TO_KEY[text];
-
-  for (const tour of TOURS) {
-    const nt = normalizeText(tour.title);
-    if (t === nt || t.includes(nt)) return tour.key;
-    const keyNorm = normalizeText(tour.key.replace(/_/g, " "));
-    if (t.includes(keyNorm)) return tour.key;
-  }
-
-  if (t.includes("saona")) return "isla_saona";
-  if (t.includes("catalina")) return "isla_catalina";
-  if (t.includes("city tour") || t.includes("zona colonial") || t.includes("santo domingo")) return "city_tour_santo_domingo";
-  if (t.includes("jarabacoa")) return "jarabacoa_aventura";
-  if (t.includes("buggies") || t.includes("macao")) return "buggies_macao";
-  if (t.includes("samana") || t.includes("samaná")) return "samana_temporada";
-
-  return null;
-}
-
-function parsePassengerCount(text) {
-  const t = normalizeText(text);
-  const digits = t.match(/\d+/);
-  if (digits) return parseInt(digits[0], 10);
-
-  const words = {
-    uno: 1,
-    una: 1,
-    dos: 2,
-    tres: 3,
-    cuatro: 4,
-    cinco: 5,
-    seis: 6,
-    siete: 7,
-    ocho: 8,
-    nueve: 9,
-    diez: 10,
-    ninguno: 0,
-    ningun: 0,
-    ningún: 0,
-    cero: 0,
-  };
-
-  for (const [k, v] of Object.entries(words)) {
-    if (t === k || t.includes(` ${k}`) || t.startsWith(k + " ")) return v;
-  }
-
-  return null;
-}
-
-async function notifyPersonalWhatsAppBookingSummary(booking) {
-  try {
-    if (!PERSONAL_WA_TO) return;
-
-    const myTo = String(PERSONAL_WA_TO).replace(/[^\d]/g, "");
-    if (!myTo) return;
-
-    const passengerPhone = String(booking?.phone || "").replace(/[^\d]/g, "");
-    if (passengerPhone && myTo === passengerPhone) return;
-
-    const tour = getTourByKey(booking.tour_key);
-
-    const summary =
-      `📌 *Nueva reserva turística*\n\n` +
-      `🏢 Agencia: *${BUSINESS_NAME}*\n` +
-      `🌴 Tour: *${tour?.title || booking.tour_key}*\n` +
-      `👤 Cliente: *${booking.passenger_name}*\n` +
-      `📞 Tel: *${passengerPhone || "—"}*\n` +
-      `👥 Pax: *${Number(booking.adults || 0) + Number(booking.children || 0)}* (${booking.adults || 0} adultos / ${booking.children || 0} niños)\n` +
-      `📍 Ciudad: ${booking.city || "—"}\n` +
-      `🚐 Salida: ${booking.pickup || "—"}\n` +
-      `📅 Fecha: *${formatDateInTZ(booking.start, BUSINESS_TIMEZONE)}*\n` +
-      `⏰ Hora: *${formatTimeInTZ(booking.start, BUSINESS_TIMEZONE)}*\n` +
-      `💵 Estimado: *${currency(booking.quote_total || 0)}*\n` +
-      `🆔 ID: ${booking.reservation_id || "—"}`;
-
-    await sendWhatsAppText(myTo, summary, "BOT");
-  } catch (e) {
-    console.error("notifyPersonalWhatsAppBookingSummary error:", e?.response?.data || e?.message || e);
-  }
-}
-
 // =========================
 // OpenAI fallback
 // =========================
@@ -2311,15 +2333,17 @@ async function callOpenAI({ session, userText, userPhone, extraSystem = "" }) {
     content: `
 Eres un asistente de WhatsApp de ${BUSINESS_NAME}.
 Servicios:
-- Tours en RD
+- Tours en República Dominicana
 - Boletos aéreos
+- Solo hoteles
 - Seguros de viaje
+- Traslados
 - Paquetes vacacionales
 
 Reglas:
 - Para tours, no inventes disponibilidad. Solo ofrece salidas reales usando get_available_departures.
 - Para tours, si van a reservar, necesitas: tour, fecha, cantidad de adultos, cantidad de niños, punto de salida, ciudad, nombre y teléfono.
-- Para boletos aéreos, seguros de viaje y paquetes vacacionales NO inventes precios. Debes pedir datos básicos y explicar que un agente confirmará.
+- Para boletos aéreos, hoteles, seguros, traslados y paquetes vacacionales NO inventes precios. Debes pedir datos básicos y explicar que un agente confirmará.
 - Responde corto, claro y orientado a convertir.
 - Fecha actual (zona ${BUSINESS_TIMEZONE}): ${todayStr}.
 - No ofrezcas salidas que inicien en menos de ${MIN_BOOKING_LEAD_MIN} minutos desde ahora.
@@ -2504,7 +2528,7 @@ Tel usuario: ${userPhone}.
 }
 
 // =========================
-// Webhooks helpers
+// Webhook verification
 // =========================
 app.get("/webhook", (req, res) => {
   const mode = req.query["hub.mode"];
@@ -2616,6 +2640,9 @@ app.get("/hub_media/:mediaId", async (req, res) => {
   }
 });
 
+// =========================
+// MAIN WEBHOOK
+// =========================
 app.post("/webhook", async (req, res) => {
   let from = "";
   let session = null;
@@ -2708,7 +2735,9 @@ app.post("/webhook", async (req, res) => {
       tNorm.includes("boleto") ||
       tNorm.includes("vuelo") ||
       tNorm.includes("seguro") ||
-      tNorm.includes("paquete");
+      tNorm.includes("paquete") ||
+      tNorm.includes("hotel") ||
+      tNorm.includes("traslado");
 
     if (session.greeted && session.state === "idle" && isGreeting(tNorm) && !hasEarlyIntent) {
       await sendWhatsAppText(from, quickHelpText());
@@ -2729,7 +2758,9 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
+    // =========================
     // POST BOOKING
+    // =========================
     if (session.state === "post_booking" && session.lastBooking) {
       const booking = session.lastBooking;
       const tour = getTourByKey(booking.tour_key);
@@ -2747,7 +2778,7 @@ app.post("/webhook", async (req, res) => {
 
       if (wantsCancel) {
         await cancelReservationTool({ reservation_id: booking.reservation_id, reason: userText });
-        await sendWhatsAppText(from, `✅ Listo. Tu reserva fue cancelada.\n\nSi deseas una nueva, escribe *"Nueva reserva"* o dime el tour.`);
+        await sendWhatsAppText(from, `✅ Listo. Tu reserva fue cancelada.\n\nSi deseas una nueva, escribe *"Nueva reserva"* o vuelve al *menú*.`);
 
         clearIntakeFlow(session);
         session.lastBooking = null;
@@ -2810,7 +2841,29 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
-    // AWAIT SLOT CHOICE
+    // =========================
+    // TOURS FLOW
+    // =========================
+    if (session.state === "await_tour_origin") {
+      const originKey = detectOriginKeyFromUser(userText);
+      if (!originKey) {
+        await sendWhatsAppText(
+          from,
+          `Perfecto 👍 Para tours en República Dominicana necesito saber *desde dónde sales*.\n\nOpciones comunes:\n${TOUR_ORIGINS.map((o) => `• ${o.title}`).join("\n")}`
+        );
+        await sendTourOriginsList(from);
+        return res.sendStatus(200);
+      }
+
+      session.pendingOrigin = originKey;
+      session.pendingServiceLine = "tours_rd";
+      updateLead(session, { tour_key: "" });
+      session.state = "idle";
+
+      await sendToursListByOrigin(from, originKey);
+      return res.sendStatus(200);
+    }
+
     if (session.state === "await_slot_choice" && session.lastSlots?.length) {
       if (["reiniciar", "reset", "resetear", "empezar", "inicio"].some((k) => tNorm.includes(k))) {
         clearIntakeFlow(session);
@@ -2912,7 +2965,6 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
-    // AWAIT ADULTS
     if (session.state === "await_adults" && session.selectedSlot) {
       const count = parsePassengerCount(userText);
       if (count === null || count < 1) {
@@ -2926,7 +2978,6 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
-    // AWAIT CHILDREN
     if (session.state === "await_children" && session.selectedSlot) {
       const count = parsePassengerCount(userText);
       if (count === null || count < 0) {
@@ -2957,11 +3008,10 @@ app.post("/webhook", async (req, res) => {
       updateLead(session, { tour_key: session.pendingTour, quotePreview: quoteText });
 
       session.state = "await_pickup";
-      await sendWhatsAppText(from, `${quoteText}\n\nAhora dime tu *punto de salida o pickup*. Ej: Santo Domingo Este / Bávaro / Punto de encuentro.`);
+      await sendWhatsAppText(from, `${quoteText}\n\nAhora dime tu *punto de salida o pickup*. Ej: zona hotelera, aeropuerto, punto de encuentro.`);
       return res.sendStatus(200);
     }
 
-    // AWAIT PICKUP
     if (session.state === "await_pickup" && session.selectedSlot) {
       if (tNorm.length < 2) {
         await sendWhatsAppText(from, `Por favor, indícame tu *punto de salida o pickup*.`);
@@ -2974,7 +3024,6 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
-    // AWAIT CITY
     if (session.state === "await_city" && session.selectedSlot) {
       if (tNorm.length < 2) {
         await sendWhatsAppText(from, `Por favor, indícame tu *ciudad*.`);
@@ -2987,7 +3036,6 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
-    // AWAIT NAME
     if (session.state === "await_name" && session.selectedSlot) {
       if (tNorm.length < 3 || ["si", "sí", "ok", "listo"].includes(tNorm)) {
         await sendWhatsAppText(from, `Por favor, envíame tu *nombre completo* 🙂`);
@@ -2999,7 +3047,6 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
-    // AWAIT PHONE -> BOOK
     if (session.state === "await_phone" && session.selectedSlot && session.pendingName) {
       const phoneDigits = userText.replace(/[^\d]/g, "");
       if (phoneDigits.length < 8) {
@@ -3033,7 +3080,25 @@ app.post("/webhook", async (req, res) => {
         `✅ *Reserva registrada*\n\n🌴 Tour: *${tour?.title || booked.tour_key}*\n👤 Cliente: *${booked.passenger_name}*\n📞 Teléfono: *${phoneDigits}*\n👥 Pasajeros: *${Number(booked.adults || 0) + Number(booked.children || 0)}* (${booked.adults || 0} adultos / ${booked.children || 0} niños)\n📍 Ciudad: ${booked.city || "—"}\n🚐 Salida: ${booked.pickup || "—"}\n📅 Fecha: *${formatDateInTZ(booked.start, BUSINESS_TIMEZONE)}*\n⏰ Hora: *${formatTimeInTZ(booked.start, BUSINESS_TIMEZONE)}*\n💵 Total estimado: *${currency(booked.quote_total || 0)}*\n📌 Pago: ${tour?.paymentPolicy || "El equipo confirmará los detalles de pago."}\n\nResponde:\n1) Confirmar\n2) Reprogramar\n3) Cancelar`
       );
 
-      await notifyPersonalWhatsAppBookingSummary(booked);
+      if (PERSONAL_WA_TO) {
+        const passengerPhone = String(booked?.phone || "").replace(/[^\d]/g, "");
+        if (String(PERSONAL_WA_TO).replace(/[^\d]/g, "") !== passengerPhone) {
+          const summary =
+            `📌 *Nueva reserva turística*\n\n` +
+            `🏢 Agencia: *${BUSINESS_NAME}*\n` +
+            `🌴 Tour: *${tour?.title || booked.tour_key}*\n` +
+            `👤 Cliente: *${booked.passenger_name}*\n` +
+            `📞 Tel: *${passengerPhone || "—"}*\n` +
+            `👥 Pax: *${Number(booked.adults || 0) + Number(booked.children || 0)}* (${booked.adults || 0} adultos / ${booked.children || 0} niños)\n` +
+            `📍 Ciudad: ${booked.city || "—"}\n` +
+            `🚐 Salida: ${booked.pickup || "—"}\n` +
+            `📅 Fecha: *${formatDateInTZ(booked.start, BUSINESS_TIMEZONE)}*\n` +
+            `⏰ Hora: *${formatTimeInTZ(booked.start, BUSINESS_TIMEZONE)}*\n` +
+            `💵 Estimado: *${currency(booked.quote_total || 0)}*\n` +
+            `🆔 ID: ${booked.reservation_id || "—"}`;
+          await notifyPersonalWhatsAppLeadSummary(summary, passengerPhone);
+        }
+      }
 
       session.lastBooking = booked;
       session.state = "post_booking";
@@ -3053,34 +3118,11 @@ app.post("/webhook", async (req, res) => {
     }
 
     // =========================
-    // NUEVOS FLUJOS NORMALES
+    // FLIGHTS FLOW
     // =========================
-
-    // Await tour origin
-    if (session.state === "await_tour_origin") {
-      const originKey = detectOriginKeyFromUser(userText);
-      if (!originKey) {
-        await sendWhatsAppText(
-          from,
-          `Perfecto 👍 Para los tours en RD necesito saber *desde dónde sales*.\n\nOpciones comunes:\n• Santo Domingo\n• Punta Cana\n• Las Terrenas`
-        );
-        await sendTourOriginsList(from);
-        return res.sendStatus(200);
-      }
-
-      session.pendingOrigin = originKey;
-      session.pendingServiceLine = "tours_rd";
-      updateLead(session, { tour_key: "" });
-      session.state = "idle";
-
-      await sendToursListByOrigin(from, originKey);
-      return res.sendStatus(200);
-    }
-
-    // Flights flow
     if (session.state === "await_flight_origin") {
       if (tNorm.length < 2) {
-        await sendWhatsAppText(from, `Indícame desde dónde deseas salir. Ej: República Dominicana, Medellín, Santo Domingo o Punta Cana.`);
+        await sendWhatsAppText(from, `Indícame desde dónde deseas salir. Ej: Santo Domingo, Punta Cana o Santiago.`);
         return res.sendStatus(200);
       }
 
@@ -3146,16 +3188,15 @@ app.post("/webhook", async (req, res) => {
         return res.sendStatus(200);
       }
 
-      const summaryText = buildNonTourLeadSummary({
-        serviceLine: "boletos_aereos",
-        departureCity: session.pendingDepartureCity || "",
-        destination: session.pendingDestination || "",
-        travelDateText: session.pendingTravelDateText || "",
-        passengers: session.pendingPassengers || 0,
-        passengerName: session.pendingName || "",
-        phone: phoneDigits,
-        notes: session.pendingNotes || "",
-      });
+      const summaryText = buildLeadSummary("Nueva solicitud de boletos aéreos", [
+        { label: "🧩 Servicio", value: serviceLineLabel("boletos_aereos") },
+        { label: "🛫 Salida / origen", value: session.pendingDepartureCity || "—" },
+        { label: "🌍 Destino", value: session.pendingDestination || "—" },
+        { label: "📅 Fecha / temporada", value: session.pendingTravelDateText || "—" },
+        { label: "👥 Personas", value: session.pendingPassengers || "—" },
+        { label: "👤 Cliente", value: session.pendingName || "—" },
+        { label: "📞 Tel", value: phoneDigits || "—" },
+      ]);
 
       updateLead(session, {
         tour_key: "",
@@ -3180,7 +3221,128 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
-    // Insurance flow
+    // =========================
+    // HOTELS FLOW
+    // =========================
+    if (session.state === "await_hotel_destination") {
+      if (tNorm.length < 2) {
+        await sendWhatsAppText(from, `Dime el *destino* o ciudad donde deseas reservar hotel.`);
+        return res.sendStatus(200);
+      }
+
+      session.pendingDestination = userText;
+      session.state = "await_hotel_date";
+      await sendWhatsAppText(from, `Perfecto 🏨\nAhora dime la *fecha aproximada* del check-in o temporada.`);
+      return res.sendStatus(200);
+    }
+
+    if (session.state === "await_hotel_date") {
+      if (tNorm.length < 2) {
+        await sendWhatsAppText(from, `Por favor, indícame la *fecha aproximada* del hotel.`);
+        return res.sendStatus(200);
+      }
+
+      session.pendingTravelDateText = userText;
+      session.state = "await_hotel_nights";
+      await sendWhatsAppText(from, `¿Cuántas *noches* deseas reservar?`);
+      return res.sendStatus(200);
+    }
+
+    if (session.state === "await_hotel_nights") {
+      const nights = parsePassengerCount(userText);
+      if (nights === null || nights < 1) {
+        await sendWhatsAppText(from, `Indícame cuántas *noches* serían. Ej: 2, 3, 5...`);
+        return res.sendStatus(200);
+      }
+
+      session.pendingNights = nights;
+      session.state = "await_hotel_people";
+      await sendWhatsAppText(from, `Perfecto. ¿Para cuántas *personas* sería la reserva del hotel?`);
+      return res.sendStatus(200);
+    }
+
+    if (session.state === "await_hotel_people") {
+      const pax = parsePassengerCount(userText);
+      if (pax === null || pax < 1) {
+        await sendWhatsAppText(from, `Indícame cuántas *personas* se hospedarían. Ej: 2`);
+        return res.sendStatus(200);
+      }
+
+      session.pendingPassengers = pax;
+      session.state = "await_hotel_stars";
+      await sendWhatsAppText(from, `Perfecto. ¿Qué tipo de hotel prefieres?\nEj: *3 estrellas*, *4 estrellas* o *5 estrellas*.`);
+      return res.sendStatus(200);
+    }
+
+    if (session.state === "await_hotel_stars") {
+      if (tNorm.length < 2) {
+        await sendWhatsAppText(from, `Indícame si prefieres *3 estrellas*, *4 estrellas* o *5 estrellas*.`);
+        return res.sendStatus(200);
+      }
+
+      session.pendingHotelStars = userText;
+      session.state = "await_hotel_name";
+      await sendWhatsAppText(from, `Gracias 👍\nAhora dime tu *nombre completo*.`);
+      return res.sendStatus(200);
+    }
+
+    if (session.state === "await_hotel_name") {
+      if (tNorm.length < 3) {
+        await sendWhatsAppText(from, `Por favor, envíame tu *nombre completo* 🙂`);
+        return res.sendStatus(200);
+      }
+
+      session.pendingName = userText;
+      session.state = "await_hotel_phone";
+      await sendWhatsAppText(from, `Gracias. Ahora envíame tu *número de teléfono* para que el equipo te contacte.`);
+      return res.sendStatus(200);
+    }
+
+    if (session.state === "await_hotel_phone") {
+      const phoneDigits = userText.replace(/[^\d]/g, "");
+      if (phoneDigits.length < 8) {
+        await sendWhatsAppText(from, `Ese número parece incompleto 🙏\nEnvíamelo así: 829XXXXXXX`);
+        return res.sendStatus(200);
+      }
+
+      const summaryText = buildLeadSummary("Nueva solicitud de solo hoteles", [
+        { label: "🧩 Servicio", value: serviceLineLabel("solo_hoteles") },
+        { label: "🌍 Destino", value: session.pendingDestination || "—" },
+        { label: "📅 Fecha / temporada", value: session.pendingTravelDateText || "—" },
+        { label: "🌙 Noches", value: session.pendingNights || "—" },
+        { label: "👥 Personas", value: session.pendingPassengers || "—" },
+        { label: "🏨 Categoría hotel", value: session.pendingHotelStars || "—" },
+        { label: "👤 Cliente", value: session.pendingName || "—" },
+        { label: "📞 Tel", value: phoneDigits || "—" },
+      ]);
+
+      updateLead(session, {
+        tour_key: "",
+        quotePreview: summaryText,
+        converted: false,
+        followupSent: false,
+      });
+
+      await handoffToHumanTool({ summary: summaryText });
+      await notifyPersonalWhatsAppLeadSummary(summaryText, phoneDigits);
+
+      await sendWhatsAppText(
+        from,
+        `✅ *Solicitud recibida*\n\nRecibí tu solicitud de *solo hoteles* y nuestro equipo te contactará con opciones según:\n` +
+          `• destino: ${session.pendingDestination || "—"}\n` +
+          `• fecha: ${session.pendingTravelDateText || "—"}\n` +
+          `• noches: ${session.pendingNights || "—"}\n` +
+          `• personas: ${session.pendingPassengers || "—"}\n` +
+          `• categoría: ${session.pendingHotelStars || "—"}`
+      );
+
+      clearIntakeFlow(session);
+      return res.sendStatus(200);
+    }
+
+    // =========================
+    // INSURANCE FLOW
+    // =========================
     if (session.state === "await_insurance_destination") {
       if (tNorm.length < 2) {
         await sendWhatsAppText(from, `Indícame el *país o destino* para tu seguro de viaje.`);
@@ -3188,20 +3350,21 @@ app.post("/webhook", async (req, res) => {
       }
 
       session.pendingDestination = userText;
-      session.state = "await_insurance_date";
-      await sendWhatsAppText(from, `Perfecto 🛡️\nAhora dime la *fecha aproximada* del viaje o temporada.`);
+      session.state = "await_insurance_days";
+      await sendWhatsAppText(from, `Perfecto 🛡️\n¿Cuántos *días* durará el viaje?`);
       return res.sendStatus(200);
     }
 
-    if (session.state === "await_insurance_date") {
-      if (tNorm.length < 2) {
-        await sendWhatsAppText(from, `Por favor, indícame la *fecha aproximada* del viaje.`);
+    if (session.state === "await_insurance_days") {
+      const days = parsePassengerCount(userText);
+      if (days === null || days < 1) {
+        await sendWhatsAppText(from, `Indícame cuántos *días* durará el viaje. Ej: 5, 8, 12...`);
         return res.sendStatus(200);
       }
 
-      session.pendingTravelDateText = userText;
+      session.pendingTripDays = days;
       session.state = "await_insurance_people";
-      await sendWhatsAppText(from, `Gracias. ¿Para cuántas *personas* sería el seguro?`);
+      await sendWhatsAppText(from, `Gracias. Ahora dime cuántas *personas* viajan.`);
       return res.sendStatus(200);
     }
 
@@ -3213,6 +3376,18 @@ app.post("/webhook", async (req, res) => {
       }
 
       session.pendingPassengers = pax;
+      session.state = "await_insurance_ages";
+      await sendWhatsAppText(from, `Perfecto. Ahora dime las *edades* de los viajeros.\nEj: 34 y 29 / 40, 12 y 8`);
+      return res.sendStatus(200);
+    }
+
+    if (session.state === "await_insurance_ages") {
+      if (tNorm.length < 1) {
+        await sendWhatsAppText(from, `Por favor, indícame las *edades* de los viajeros.`);
+        return res.sendStatus(200);
+      }
+
+      session.pendingTravelerAgesText = userText;
       session.state = "await_insurance_name";
       await sendWhatsAppText(from, `Perfecto 👍\nAhora dime tu *nombre completo*.`);
       return res.sendStatus(200);
@@ -3237,16 +3412,15 @@ app.post("/webhook", async (req, res) => {
         return res.sendStatus(200);
       }
 
-      const summaryText = buildNonTourLeadSummary({
-        serviceLine: "seguros_viaje",
-        departureCity: "",
-        destination: session.pendingDestination || "",
-        travelDateText: session.pendingTravelDateText || "",
-        passengers: session.pendingPassengers || 0,
-        passengerName: session.pendingName || "",
-        phone: phoneDigits,
-        notes: session.pendingNotes || "",
-      });
+      const summaryText = buildLeadSummary("Nueva solicitud de seguro de viaje", [
+        { label: "🧩 Servicio", value: serviceLineLabel("seguros_viaje") },
+        { label: "🌍 Destino", value: session.pendingDestination || "—" },
+        { label: "📆 Días de viaje", value: session.pendingTripDays || "—" },
+        { label: "👥 Personas", value: session.pendingPassengers || "—" },
+        { label: "🎂 Edades", value: session.pendingTravelerAgesText || "—" },
+        { label: "👤 Cliente", value: session.pendingName || "—" },
+        { label: "📞 Tel", value: phoneDigits || "—" },
+      ]);
 
       updateLead(session, {
         tour_key: "",
@@ -3262,6 +3436,97 @@ app.post("/webhook", async (req, res) => {
         from,
         `✅ *Solicitud recibida*\n\nRecibí tu solicitud de *seguro de viaje* y nuestro equipo te contactará con opciones según:\n` +
           `• destino: ${session.pendingDestination || "—"}\n` +
+          `• días: ${session.pendingTripDays || "—"}\n` +
+          `• personas: ${session.pendingPassengers || "—"}\n` +
+          `• edades: ${session.pendingTravelerAgesText || "—"}`
+      );
+
+      clearIntakeFlow(session);
+      return res.sendStatus(200);
+    }
+
+    // =========================
+    // TRANSFERS FLOW
+    // =========================
+    if (session.state === "await_transfer_route") {
+      if (tNorm.length < 2) {
+        await sendWhatsAppText(from, `Dime la *ruta del traslado*.\nEj: aeropuerto → hotel / hotel → aeropuerto / ciudad → ciudad.`);
+        return res.sendStatus(200);
+      }
+
+      session.pendingTransferRoute = userText;
+      session.state = "await_transfer_date";
+      await sendWhatsAppText(from, `Perfecto 🚕\nAhora dime la *fecha aproximada* del traslado.`);
+      return res.sendStatus(200);
+    }
+
+    if (session.state === "await_transfer_date") {
+      if (tNorm.length < 2) {
+        await sendWhatsAppText(from, `Por favor, indícame la *fecha aproximada* del traslado.`);
+        return res.sendStatus(200);
+      }
+
+      session.pendingTravelDateText = userText;
+      session.state = "await_transfer_people";
+      await sendWhatsAppText(from, `Gracias. ¿Para cuántas *personas* sería el traslado?`);
+      return res.sendStatus(200);
+    }
+
+    if (session.state === "await_transfer_people") {
+      const pax = parsePassengerCount(userText);
+      if (pax === null || pax < 1) {
+        await sendWhatsAppText(from, `Indícame cuántas *personas* viajarían. Ej: 2`);
+        return res.sendStatus(200);
+      }
+
+      session.pendingPassengers = pax;
+      session.state = "await_transfer_name";
+      await sendWhatsAppText(from, `Perfecto 👍\nAhora dime tu *nombre completo*.`);
+      return res.sendStatus(200);
+    }
+
+    if (session.state === "await_transfer_name") {
+      if (tNorm.length < 3) {
+        await sendWhatsAppText(from, `Por favor, envíame tu *nombre completo* 🙂`);
+        return res.sendStatus(200);
+      }
+
+      session.pendingName = userText;
+      session.state = "await_transfer_phone";
+      await sendWhatsAppText(from, `Gracias. Ahora envíame tu *número de teléfono* para que el equipo te contacte.`);
+      return res.sendStatus(200);
+    }
+
+    if (session.state === "await_transfer_phone") {
+      const phoneDigits = userText.replace(/[^\d]/g, "");
+      if (phoneDigits.length < 8) {
+        await sendWhatsAppText(from, `Ese número parece incompleto 🙏\nEnvíamelo así: 829XXXXXXX`);
+        return res.sendStatus(200);
+      }
+
+      const summaryText = buildLeadSummary("Nueva solicitud de traslado", [
+        { label: "🧩 Servicio", value: serviceLineLabel("traslados") },
+        { label: "🚕 Ruta", value: session.pendingTransferRoute || "—" },
+        { label: "📅 Fecha", value: session.pendingTravelDateText || "—" },
+        { label: "👥 Personas", value: session.pendingPassengers || "—" },
+        { label: "👤 Cliente", value: session.pendingName || "—" },
+        { label: "📞 Tel", value: phoneDigits || "—" },
+      ]);
+
+      updateLead(session, {
+        tour_key: "",
+        quotePreview: summaryText,
+        converted: false,
+        followupSent: false,
+      });
+
+      await handoffToHumanTool({ summary: summaryText });
+      await notifyPersonalWhatsAppLeadSummary(summaryText, phoneDigits);
+
+      await sendWhatsAppText(
+        from,
+        `✅ *Solicitud recibida*\n\nRecibí tu solicitud de *traslado* y nuestro equipo te contactará con opciones según:\n` +
+          `• ruta: ${session.pendingTransferRoute || "—"}\n` +
           `• fecha: ${session.pendingTravelDateText || "—"}\n` +
           `• personas: ${session.pendingPassengers || "—"}`
       );
@@ -3270,7 +3535,9 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
-    // Packages flow
+    // =========================
+    // PACKAGES FLOW
+    // =========================
     if (session.state === "await_package_destination") {
       const packageKey = detectPackageDestinationKeyFromUser(userText);
       if (packageKey && packageKey !== "otro_destino") {
@@ -3311,6 +3578,18 @@ app.post("/webhook", async (req, res) => {
       }
 
       session.pendingPassengers = pax;
+      session.state = "await_package_stars";
+      await sendWhatsAppText(from, `Perfecto. ¿Qué tipo de hotel prefieres dentro del paquete?\nEj: *3 estrellas*, *4 estrellas* o *5 estrellas*.`);
+      return res.sendStatus(200);
+    }
+
+    if (session.state === "await_package_stars") {
+      if (tNorm.length < 2) {
+        await sendWhatsAppText(from, `Indícame si prefieres *3 estrellas*, *4 estrellas* o *5 estrellas*.`);
+        return res.sendStatus(200);
+      }
+
+      session.pendingHotelStars = userText;
       session.state = "await_package_name";
       await sendWhatsAppText(from, `Perfecto 👍\nAhora dime tu *nombre completo*.`);
       return res.sendStatus(200);
@@ -3335,16 +3614,15 @@ app.post("/webhook", async (req, res) => {
         return res.sendStatus(200);
       }
 
-      const summaryText = buildNonTourLeadSummary({
-        serviceLine: "paquetes_vacacionales",
-        departureCity: "",
-        destination: session.pendingDestination || "",
-        travelDateText: session.pendingTravelDateText || "",
-        passengers: session.pendingPassengers || 0,
-        passengerName: session.pendingName || "",
-        phone: phoneDigits,
-        notes: session.pendingNotes || "",
-      });
+      const summaryText = buildLeadSummary("Nueva solicitud de paquete vacacional", [
+        { label: "🧩 Servicio", value: serviceLineLabel("paquetes_vacacionales") },
+        { label: "🌍 Destino", value: session.pendingDestination || "—" },
+        { label: "📅 Fecha / temporada", value: session.pendingTravelDateText || "—" },
+        { label: "👥 Personas", value: session.pendingPassengers || "—" },
+        { label: "🏨 Categoría hotel", value: session.pendingHotelStars || "—" },
+        { label: "👤 Cliente", value: session.pendingName || "—" },
+        { label: "📞 Tel", value: phoneDigits || "—" },
+      ]);
 
       updateLead(session, {
         tour_key: "",
@@ -3361,14 +3639,78 @@ app.post("/webhook", async (req, res) => {
         `✅ *Solicitud recibida*\n\nRecibí tu solicitud de *paquete vacacional* y nuestro equipo te contactará con opciones según:\n` +
           `• destino: ${session.pendingDestination || "—"}\n` +
           `• fecha / temporada: ${session.pendingTravelDateText || "—"}\n` +
-          `• personas: ${session.pendingPassengers || "—"}`
+          `• personas: ${session.pendingPassengers || "—"}\n` +
+          `• categoría hotel: ${session.pendingHotelStars || "—"}`
       );
 
       clearIntakeFlow(session);
       return res.sendStatus(200);
     }
 
-    // menu ask
+    // =========================
+    // ADVISOR FLOW
+    // =========================
+    if (session.state === "await_advisor_topic") {
+      if (tNorm.length < 2) {
+        await sendWhatsAppText(from, `Cuéntame brevemente qué necesitas para poder pasarte con el asesor correcto.`);
+        return res.sendStatus(200);
+      }
+
+      session.pendingAdvisorTopic = userText;
+      session.state = "await_advisor_name";
+      await sendWhatsAppText(from, `Perfecto 👍\nAhora dime tu *nombre completo*.`);
+      return res.sendStatus(200);
+    }
+
+    if (session.state === "await_advisor_name") {
+      if (tNorm.length < 3) {
+        await sendWhatsAppText(from, `Por favor, envíame tu *nombre completo* 🙂`);
+        return res.sendStatus(200);
+      }
+
+      session.pendingName = userText;
+      session.state = "await_advisor_phone";
+      await sendWhatsAppText(from, `Gracias. Ahora envíame tu *número de teléfono* para que un asesor te contacte.`);
+      return res.sendStatus(200);
+    }
+
+    if (session.state === "await_advisor_phone") {
+      const phoneDigits = userText.replace(/[^\d]/g, "");
+      if (phoneDigits.length < 8) {
+        await sendWhatsAppText(from, `Ese número parece incompleto 🙏\nEnvíamelo así: 829XXXXXXX`);
+        return res.sendStatus(200);
+      }
+
+      const summaryText = buildLeadSummary("Solicitud para hablar con un asesor", [
+        { label: "🧩 Servicio", value: serviceLineLabel("hablar_asesor") },
+        { label: "🌎 Mercado", value: "República Dominicana" },
+        { label: "📝 Tema", value: session.pendingAdvisorTopic || "—" },
+        { label: "👤 Cliente", value: session.pendingName || "—" },
+        { label: "📞 Tel", value: phoneDigits || "—" },
+      ]);
+
+      updateLead(session, {
+        tour_key: "",
+        quotePreview: summaryText,
+        converted: false,
+        followupSent: false,
+      });
+
+      await handoffToHumanTool({ summary: summaryText });
+      await notifyPersonalWhatsAppLeadSummary(summaryText, phoneDigits);
+
+      await sendWhatsAppText(
+        from,
+        `✅ *Solicitud recibida*\n\nYa pasé tu caso para que un asesor de *República Dominicana* te contacte.\n\nTema: ${session.pendingAdvisorTopic || "Consulta general"}`
+      );
+
+      clearIntakeFlow(session);
+      return res.sendStatus(200);
+    }
+
+    // =========================
+    // FAST ROUTES / MENUS
+    // =========================
     if (
       tNorm.includes("menu") ||
       tNorm.includes("menú") ||
@@ -3381,7 +3723,6 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
-    // service line selected
     const serviceLineKey = detectServiceLineFromUser(userText);
     if (serviceLineKey) {
       clearIntakeFlow(session);
@@ -3392,11 +3733,25 @@ app.post("/webhook", async (req, res) => {
         return res.sendStatus(200);
       }
 
+      if (serviceLineKey === "ubicacion_contacto") {
+        await sendWhatsAppText(from, buildLocationContactText());
+        return res.sendStatus(200);
+      }
+
+      if (serviceLineKey === "hablar_asesor") {
+        session.state = "await_advisor_topic";
+        await sendWhatsAppText(
+          from,
+          `Perfecto 👤 Vamos a conectarte con un asesor de *República Dominicana*.\n\nCuéntame brevemente qué necesitas.`
+        );
+        return res.sendStatus(200);
+      }
+
       if (serviceLineKey === "tours_rd") {
         session.state = "await_tour_origin";
         await sendWhatsAppText(
           from,
-          `Perfecto 🌴 Vamos con *Tours en RD*.\n\nPrimero dime *desde dónde sales*.\nOpciones comunes: Santo Domingo, Punta Cana o Las Terrenas.`
+          `Perfecto 🌴 Vamos con *Tours en República Dominicana*.\n\nPrimero dime *desde dónde sales*.\nOpciones comunes:\n${TOUR_ORIGINS.map((o) => `• ${o.title}`).join("\n")}`
         );
         await sendTourOriginsList(from);
         return res.sendStatus(200);
@@ -3406,7 +3761,16 @@ app.post("/webhook", async (req, res) => {
         session.state = "await_flight_origin";
         await sendWhatsAppText(
           from,
-          `Perfecto ✈️ Vamos con *boletos aéreos*.\n\n¿Desde dónde deseas salir?\nEj: República Dominicana, Medellín, Santo Domingo o Punta Cana.`
+          `Perfecto ✈️ Vamos con *boletos aéreos*.\n\n¿Desde dónde deseas salir?\nEj: Santo Domingo, Punta Cana o Santiago.`
+        );
+        return res.sendStatus(200);
+      }
+
+      if (serviceLineKey === "solo_hoteles") {
+        session.state = "await_hotel_destination";
+        await sendWhatsAppText(
+          from,
+          `Perfecto 🏨 Vamos con *solo hoteles*.\n\n¿En qué *destino o ciudad* deseas hospedarte?`
         );
         return res.sendStatus(200);
       }
@@ -3416,6 +3780,15 @@ app.post("/webhook", async (req, res) => {
         await sendWhatsAppText(
           from,
           `Perfecto 🛡️ Vamos con *seguros de viaje*.\n\n¿A qué *país o destino* viajas?`
+        );
+        return res.sendStatus(200);
+      }
+
+      if (serviceLineKey === "traslados") {
+        session.state = "await_transfer_route";
+        await sendWhatsAppText(
+          from,
+          `Perfecto 🚕 Vamos con *traslados*.\n\nDime la *ruta* que necesitas.\nEj: aeropuerto → hotel / hotel → aeropuerto / ciudad → ciudad.`
         );
         return res.sendStatus(200);
       }
@@ -3431,7 +3804,6 @@ app.post("/webhook", async (req, res) => {
       }
     }
 
-    // categories ask
     if (
       tNorm.includes("categorias") ||
       tNorm.includes("categorías") ||
@@ -3443,7 +3815,6 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
-    // category selected
     const categoryKey = detectCategoryKeyFromUser(userText);
     if (categoryKey) {
       session.pendingServiceLine = "tours_rd";
@@ -3453,10 +3824,15 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
-    // tour selected or typed
-    const tourKey = detectTourKeyFromUser(userText) || session.pendingTour;
-    const directDetectedTour = detectTourKeyFromUser(userText);
+    const originKey = detectOriginKeyFromUser(userText);
+    if (originKey && !session.pendingTour) {
+      session.pendingServiceLine = "tours_rd";
+      session.pendingOrigin = originKey;
+      await sendToursListByOrigin(from, originKey);
+      return res.sendStatus(200);
+    }
 
+    const directDetectedTour = detectTourKeyFromUser(userText);
     if (directDetectedTour) {
       session.pendingServiceLine = "tours_rd";
       session.pendingTour = directDetectedTour;
@@ -3493,22 +3869,12 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
-    // generic FAQ for pending tour
     if (session.pendingTour && (wantsQuote(tNorm) || wantsIncludes(tNorm) || wantsSchedule(tNorm) || wantsPayments(tNorm) || wantsPolicies(tNorm))) {
       const tour = getTourByKey(session.pendingTour);
       await sendWhatsAppText(from, buildTourFaqReply(tour, tNorm));
       return res.sendStatus(200);
     }
 
-    // explicit reserve but no tour
-    if (!tourKey && (tNorm.includes("reservar") || tNorm.includes("reserva") || tNorm.includes("cotizacion") || tNorm.includes("cotización"))) {
-      await sendWhatsAppText(from, `Claro ✅ Primero elige el servicio que te interesa.`);
-      await sendWhatsAppText(from, mainMenuText());
-      await sendServiceLinesList(from);
-      return res.sendStatus(200);
-    }
-
-    // pending tour + date
     if (session.pendingTour) {
       const range = parseDateRangeFromText(userText);
       if (range) {
@@ -3533,7 +3899,9 @@ app.post("/webhook", async (req, res) => {
       }
     }
 
-    // Fallback OpenAI
+    // =========================
+    // FALLBACK OPENAI
+    // =========================
     const reply = await callOpenAI({
       session,
       userText,
@@ -3545,16 +3913,6 @@ app.post("/webhook", async (req, res) => {
           ? `Nota: el servicio actual pendiente es ${session.pendingServiceLine}.`
           : "",
     });
-
-    if (
-      normalizeText(reply).includes("menú") ||
-      normalizeText(reply).includes("menu") ||
-      normalizeText(reply).includes("servicio") ||
-      normalizeText(reply).includes("tour")
-    ) {
-      await sendWhatsAppText(from, reply);
-      return res.sendStatus(200);
-    }
 
     await sendWhatsAppText(from, reply);
     return res.sendStatus(200);
@@ -3618,6 +3976,8 @@ async function followupLeadsLoop() {
 
 async function reminderLoop() {
   try {
+    if (!GOOGLE_CALENDAR_ID || !process.env.GOOGLE_SERVICE_ACCOUNT_JSON) return;
+
     const calendar = getCalendarClient();
     const now = new Date();
     const in26h = addMinutes(now, 26 * 60);
@@ -3673,6 +4033,21 @@ async function reminderLoop() {
     }
   } catch (e) {
     console.error("Reminder loop error:", e?.response?.data || e?.message || e);
+  }
+}
+
+async function notifyPersonalWhatsAppLeadSummary(summaryText, customerPhone = "") {
+  try {
+    if (!PERSONAL_WA_TO) return;
+
+    const myTo = String(PERSONAL_WA_TO).replace(/[^\d]/g, "");
+    const leadPhone = String(customerPhone || "").replace(/[^\d]/g, "");
+    if (!myTo) return;
+    if (leadPhone && myTo === leadPhone) return;
+
+    await sendWhatsAppText(myTo, summaryText, "BOT");
+  } catch (e) {
+    console.error("notifyPersonalWhatsAppLeadSummary error:", e?.response?.data || e?.message || e);
   }
 }
 
