@@ -1070,6 +1070,28 @@ function toE164DigitsRD(phoneDigits) {
   return d;
 }
 
+function waRowTitle(title, max = 24) {
+  const clean = String(title || "").replace(/\s+/g, " ").trim();
+  if (!clean) return "";
+  return clean.length <= max ? clean : clean.slice(0, max).trim();
+}
+
+function serviceLineRowTitle(service) {
+  const map = {
+    tours_rd: "Tours RD",
+    boletos_aereos: "Boletos aéreos",
+    solo_hoteles: "Solo hoteles",
+    seguros_viaje: "Seguros de viaje",
+    traslados: "Traslados",
+    paquetes_vacacionales: "Paquetes",
+    hablar_asesor: "Hablar con asesor",
+    ubicacion_contacto: "Ubicación/contacto",
+    catalogo_pdf: "Catálogo PDF",
+  };
+
+  return waRowTitle(map[service?.key] || service?.title || "");
+}
+
 function detectCatalogRequest(textNorm) {
   const t = textNorm || "";
   return (
@@ -1093,11 +1115,7 @@ function detectServiceLineFromUser(text) {
     t.includes("playa") ||
     t.includes("isla") ||
     t.includes("buggies") ||
-    t.includes("jarabacoa") ||
-    t.includes("santo domingo") ||
-    t.includes("samana") ||
-    t.includes("samaná") ||
-    t.includes("punta cana")
+    t.includes("jarabacoa")
   ) {
     return "tours_rd";
   }
@@ -1497,7 +1515,11 @@ async function sendReminderWhatsAppToBestTarget(priv, fallbackPhoneDigits, text)
 
 async function sendServiceLinesList(to) {
   const url = `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`;
-  const rows = SERVICE_LINES.map((s) => ({ id: s.id, title: s.title, description: "" }));
+  const rows = SERVICE_LINES.map((s) => ({
+    id: s.id,
+    title: serviceLineRowTitle(s),
+    description: "",
+  }));
 
   await axios.post(
     url,
@@ -1532,7 +1554,11 @@ async function sendServiceLinesList(to) {
 
 async function sendTourOriginsList(to) {
   const url = `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`;
-  const rows = TOUR_ORIGINS.map((o) => ({ id: o.id, title: o.title, description: "" }));
+  const rows = TOUR_ORIGINS.map((o) => ({
+    id: o.id,
+    title: waRowTitle(o.title),
+    description: "",
+  }));
 
   await axios.post(
     url,
@@ -1567,7 +1593,11 @@ async function sendTourOriginsList(to) {
 
 async function sendPackageDestinationsList(to) {
   const url = `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`;
-  const rows = PACKAGE_DESTINATIONS.map((d) => ({ id: d.id, title: d.title, description: "" }));
+  const rows = PACKAGE_DESTINATIONS.map((d) => ({
+    id: d.id,
+    title: waRowTitle(d.title),
+    description: "",
+  }));
 
   await axios.post(
     url,
@@ -1602,7 +1632,11 @@ async function sendPackageDestinationsList(to) {
 
 async function sendCategoriesList(to) {
   const url = `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`;
-  const rows = TOUR_CATEGORIES.map((c) => ({ id: c.id, title: c.title, description: "" }));
+  const rows = TOUR_CATEGORIES.map((c) => ({
+    id: c.id,
+    title: waRowTitle(c.title),
+    description: "",
+  }));
 
   await axios.post(
     url,
@@ -1647,7 +1681,7 @@ async function sendToursListByCategory(to, categoryKey) {
 
   const rows = tours.slice(0, 10).map((t) => ({
     id: t.id,
-    title: t.title.slice(0, 24),
+    title: waRowTitle(t.title),
     description: `${PRICE_CURRENCY}${t.basePriceAdult} adulto • ${t.durationLabel}`.slice(0, 72),
   }));
 
@@ -1662,7 +1696,7 @@ async function sendToursListByCategory(to, categoryKey) {
         header: { type: "text", text: category.title },
         body: { text: "Elige un tour para ver precio, detalles y reservar 👇" },
         footer: { text: BUSINESS_NAME },
-        action: { button: "Ver tours", sections: [{ title: category.title, rows }] },
+        action: { button: "Ver tours", sections: [{ title: waRowTitle(category.title), rows }] },
       },
     },
     { headers: { Authorization: `Bearer ${WA_TOKEN}` } }
@@ -1694,7 +1728,7 @@ async function sendToursListByOrigin(to, originKey) {
 
   const rows = tours.slice(0, 10).map((t) => ({
     id: t.id,
-    title: t.title.slice(0, 24),
+    title: waRowTitle(t.title),
     description: `${PRICE_CURRENCY}${t.basePriceAdult} adulto • ${t.durationLabel}`.slice(0, 72),
   }));
 
@@ -1709,7 +1743,7 @@ async function sendToursListByOrigin(to, originKey) {
         header: { type: "text", text: `Salidas desde ${origin.title}` },
         body: { text: "Elige un tour para ver detalles y reservar 👇" },
         footer: { text: BUSINESS_NAME },
-        action: { button: "Ver tours", sections: [{ title: origin.title, rows }] },
+        action: { button: "Ver tours", sections: [{ title: waRowTitle(origin.title), rows }] },
       },
     },
     { headers: { Authorization: `Bearer ${WA_TOKEN}` } }
@@ -3741,6 +3775,71 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
+    if (
+      tNorm.includes("categorias") ||
+      tNorm.includes("categorías") ||
+      tNorm.includes("ver tours")
+    ) {
+      session.pendingServiceLine = "tours_rd";
+      await sendWhatsAppText(from, categoriesEmojiText());
+      await sendCategoriesList(from);
+      return res.sendStatus(200);
+    }
+
+    const categoryKey = detectCategoryKeyFromUser(userText);
+    if (categoryKey) {
+      session.pendingServiceLine = "tours_rd";
+      session.pendingCategory = categoryKey;
+      updateLead(session, { tour_key: session.pendingTour || "" });
+      await sendToursListByCategory(from, categoryKey);
+      return res.sendStatus(200);
+    }
+
+    const originKey = detectOriginKeyFromUser(userText);
+    if (originKey && !session.pendingTour) {
+      session.pendingServiceLine = "tours_rd";
+      session.pendingOrigin = originKey;
+      await sendToursListByOrigin(from, originKey);
+      return res.sendStatus(200);
+    }
+
+    const directDetectedTour = detectTourKeyFromUser(userText);
+    if (directDetectedTour) {
+      session.pendingServiceLine = "tours_rd";
+      session.pendingTour = directDetectedTour;
+      const tour = getTourByKey(directDetectedTour);
+      updateLead(session, { tour_key: directDetectedTour });
+
+      if (wantsQuote(tNorm) || wantsIncludes(tNorm) || wantsSchedule(tNorm) || wantsPayments(tNorm) || wantsPolicies(tNorm)) {
+        await sendWhatsAppText(from, buildTourFaqReply(tour, tNorm));
+        return res.sendStatus(200);
+      }
+
+      const range = parseDateRangeFromText(userText);
+      if (!range) {
+        await sendWhatsAppText(
+          from,
+          `${buildTourInfoText(tour)}\n\nSi deseas reservar, dime la *fecha* o el *día* que te interesa.\nEj: "mañana", "viernes" o "14 de junio".`
+        );
+        session.state = "await_day";
+        return res.sendStatus(200);
+      }
+
+      const slots = await getAvailableSlotsTool({ tour_key: directDetectedTour, from: range.from, to: range.to });
+      if (!slots.length) {
+        await sendWhatsAppText(from, `No veo salidas disponibles para ese rango 🙏\nDime otro día o mes y te comparto más opciones.`);
+        session.state = "await_day";
+        return res.sendStatus(200);
+      }
+
+      session.pendingRange = range;
+      session.lastSlots = slots;
+      session.state = "await_slot_choice";
+      const listText = formatSlotsList(directDetectedTour, slots, session);
+      await sendWhatsAppText(from, listText);
+      return res.sendStatus(200);
+    }
+
     const serviceLineKey = detectServiceLineFromUser(userText);
     if (serviceLineKey) {
       clearIntakeFlow(session);
@@ -3820,71 +3919,6 @@ app.post("/webhook", async (req, res) => {
         await sendPackageDestinationsList(from);
         return res.sendStatus(200);
       }
-    }
-
-    if (
-      tNorm.includes("categorias") ||
-      tNorm.includes("categorías") ||
-      tNorm.includes("ver tours")
-    ) {
-      session.pendingServiceLine = "tours_rd";
-      await sendWhatsAppText(from, categoriesEmojiText());
-      await sendCategoriesList(from);
-      return res.sendStatus(200);
-    }
-
-    const categoryKey = detectCategoryKeyFromUser(userText);
-    if (categoryKey) {
-      session.pendingServiceLine = "tours_rd";
-      session.pendingCategory = categoryKey;
-      updateLead(session, { tour_key: session.pendingTour || "" });
-      await sendToursListByCategory(from, categoryKey);
-      return res.sendStatus(200);
-    }
-
-    const originKey = detectOriginKeyFromUser(userText);
-    if (originKey && !session.pendingTour) {
-      session.pendingServiceLine = "tours_rd";
-      session.pendingOrigin = originKey;
-      await sendToursListByOrigin(from, originKey);
-      return res.sendStatus(200);
-    }
-
-    const directDetectedTour = detectTourKeyFromUser(userText);
-    if (directDetectedTour) {
-      session.pendingServiceLine = "tours_rd";
-      session.pendingTour = directDetectedTour;
-      const tour = getTourByKey(directDetectedTour);
-      updateLead(session, { tour_key: directDetectedTour });
-
-      if (wantsQuote(tNorm) || wantsIncludes(tNorm) || wantsSchedule(tNorm) || wantsPayments(tNorm) || wantsPolicies(tNorm)) {
-        await sendWhatsAppText(from, buildTourFaqReply(tour, tNorm));
-        return res.sendStatus(200);
-      }
-
-      const range = parseDateRangeFromText(userText);
-      if (!range) {
-        await sendWhatsAppText(
-          from,
-          `${buildTourInfoText(tour)}\n\nSi deseas reservar, dime la *fecha* o el *día* que te interesa.\nEj: "mañana", "viernes" o "14 de junio".`
-        );
-        session.state = "await_day";
-        return res.sendStatus(200);
-      }
-
-      const slots = await getAvailableSlotsTool({ tour_key: directDetectedTour, from: range.from, to: range.to });
-      if (!slots.length) {
-        await sendWhatsAppText(from, `No veo salidas disponibles para ese rango 🙏\nDime otro día o mes y te comparto más opciones.`);
-        session.state = "await_day";
-        return res.sendStatus(200);
-      }
-
-      session.pendingRange = range;
-      session.lastSlots = slots;
-      session.state = "await_slot_choice";
-      const listText = formatSlotsList(directDetectedTour, slots, session);
-      await sendWhatsAppText(from, listText);
-      return res.sendStatus(200);
     }
 
     if (session.pendingTour && (wantsQuote(tNorm) || wantsIncludes(tNorm) || wantsSchedule(tNorm) || wantsPayments(tNorm) || wantsPolicies(tNorm))) {
