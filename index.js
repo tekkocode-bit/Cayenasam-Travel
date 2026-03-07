@@ -1204,6 +1204,24 @@ function detectPackageDestinationKeyFromUser(text) {
   return null;
 }
 
+function detectCategoryKeyFromUser(text) {
+  const t = normalizeText(text);
+  if (CATEGORY_ID_TO_KEY[text]) return CATEGORY_ID_TO_KEY[text];
+
+  if (t.includes("tour diario") || t.includes("tours diarios")) return "tours_diarios";
+  if (t.includes("playa") || t.includes("isla")) return "playas";
+  if (t.includes("montana") || t.includes("montaña") || t.includes("jarabacoa")) return "montanas";
+  if (t.includes("especial")) return "excursiones_especiales";
+  if (t.includes("temporada") || t.includes("paquete")) return "paquetes_temporada";
+
+  for (const c of TOUR_CATEGORIES) {
+    const n = normalizeText(c.title);
+    if (t === n || t.includes(n)) return c.key;
+  }
+
+  return null;
+}
+
 function detectTourKeyFromUser(text) {
   const t = normalizeText(text);
   if (TOUR_ID_TO_KEY[text]) return TOUR_ID_TO_KEY[text];
