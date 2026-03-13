@@ -73,6 +73,20 @@ function safeJson(str, fallback) {
   }
 }
 
+function uniqueStrings(arr) {
+  return Array.from(new Set((arr || []).filter(Boolean).map((v) => String(v).trim()).filter(Boolean)));
+}
+
+function chunkArray(arr, size) {
+  const out = [];
+  const input = Array.isArray(arr) ? arr : [];
+  const n = Math.max(1, Number(size || 1));
+  for (let i = 0; i < input.length; i += n) {
+    out.push(input.slice(i, i + n));
+  }
+  return out;
+}
+
 // =========================
 // MENÚ PRINCIPAL
 // =========================
@@ -107,6 +121,13 @@ const PACKAGE_DESTINATIONS = [
 ];
 
 const PACKAGE_DESTINATION_ID_TO_KEY = Object.fromEntries(PACKAGE_DESTINATIONS.map((p) => [p.id, p.key]));
+
+const TOUR_COLLECTIONS = [
+  { key: "marzo", id: "col_marzo", title: "Tours de Marzo" },
+  { key: "semana_santa", id: "col_semana_santa", title: "Tours Semana Santa" },
+];
+
+const TOUR_COLLECTION_ID_TO_KEY = Object.fromEntries(TOUR_COLLECTIONS.map((c) => [c.id, c.key]));
 
 // =========================
 // REDIS
@@ -664,6 +685,7 @@ function defaultTourCatalog() {
       key: "city_tour_santo_domingo",
       id: "tour_city_tour_santo_domingo",
       title: "City Tour Santo Domingo",
+      bookingMode: "calendar",
       category: "tours_diarios",
       origins: ["santo_domingo"],
       description: "Recorrido guiado por la Zona Colonial y puntos icónicos de Santo Domingo.",
@@ -678,6 +700,7 @@ function defaultTourCatalog() {
       reservationPolicy: "Reserva con al menos 24 horas de anticipación.",
       paymentPolicy: "Separa con avance para confirmar tu cupo.",
       includes: ["Transporte interno", "Guía", "Paradas fotográficas"],
+      aliases: ["city tour", "zona colonial"],
       schedule: {
         mon: ["09:00", "15:00"],
         tue: ["09:00", "15:00"],
@@ -692,8 +715,10 @@ function defaultTourCatalog() {
       key: "isla_saona",
       id: "tour_isla_saona",
       title: "Isla Saona",
+      bookingMode: "calendar",
       category: "playas",
       origins: ["santo_domingo", "punta_cana"],
+      collections: ["marzo", "semana_santa"],
       description: "Excursión de día completo con playa, lancha/catamarán y ambiente caribeño.",
       durationMin: 720,
       durationLabel: "Día completo",
@@ -706,6 +731,13 @@ function defaultTourCatalog() {
       reservationPolicy: "Reserva con 48 horas de anticipación.",
       paymentPolicy: "Requiere avance para bloquear espacios.",
       includes: ["Transporte", "Guía", "Almuerzo", "Bebidas"],
+      aliases: ["saona"],
+      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428133/Isla_Saona_mcvfid.jpg",
+      mediaUrls: [
+        "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428133/Isla_Saona_mcvfid.jpg",
+        "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427801/Isla_Saona_sndbbm.jpg",
+        "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427802/Isla_Saona2_z0kre2.jpg",
+      ],
       schedule: {
         mon: ["06:00"],
         tue: ["06:00"],
@@ -720,8 +752,10 @@ function defaultTourCatalog() {
       key: "isla_catalina",
       id: "tour_isla_catalina",
       title: "Isla Catalina",
+      bookingMode: "calendar",
       category: "playas",
       origins: ["santo_domingo", "punta_cana"],
+      collections: ["punta_cana", "semana_santa"],
       description: "Tour ideal para disfrutar de playa, snorkeling y día relajado.",
       durationMin: 660,
       durationLabel: "Día completo",
@@ -734,6 +768,12 @@ function defaultTourCatalog() {
       reservationPolicy: "Reserva con 48 horas de anticipación.",
       paymentPolicy: "Avance obligatorio para confirmar.",
       includes: ["Transporte", "Guía", "Snorkeling", "Almuerzo"],
+      aliases: ["catalina"],
+      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427501/Isla_Catalina_kavssn.jpg",
+      mediaUrls: [
+        "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427501/Isla_Catalina_kavssn.jpg",
+        "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427800/Isla_Catalina_hxfyjm.jpg",
+      ],
       schedule: {
         mon: ["06:30"],
         wed: ["06:30"],
@@ -745,6 +785,7 @@ function defaultTourCatalog() {
       key: "jarabacoa_aventura",
       id: "tour_jarabacoa_aventura",
       title: "Jarabacoa Aventura",
+      bookingMode: "calendar",
       category: "montanas",
       origins: ["santo_domingo"],
       description: "Ruta de montaña con paisajes, río y paradas fotográficas.",
@@ -759,6 +800,7 @@ function defaultTourCatalog() {
       reservationPolicy: "Reserva con 48 horas de anticipación.",
       paymentPolicy: "Separa con avance.",
       includes: ["Transporte", "Guía", "Paradas", "Hidratación"],
+      aliases: ["jarabacoa"],
       schedule: {
         sat: ["06:00"],
         sun: ["06:00"],
@@ -768,8 +810,10 @@ function defaultTourCatalog() {
       key: "buggies_macao",
       id: "tour_buggies_macao",
       title: "Buggies Macao",
+      bookingMode: "calendar",
       category: "excursiones_especiales",
       origins: ["punta_cana"],
+      collections: ["punta_cana", "marzo"],
       description: "Aventura en buggies con playa y recorrido guiado.",
       durationMin: 300,
       durationLabel: "5 horas",
@@ -782,6 +826,12 @@ function defaultTourCatalog() {
       reservationPolicy: "Reserva con 24 horas de anticipación.",
       paymentPolicy: "Avance para confirmar.",
       includes: ["Transporte", "Guía", "Equipo básico"],
+      aliases: ["buggies", "macao"],
+      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427499/Buggies_d3s2th.jpg",
+      mediaUrls: [
+        "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427499/Buggies_d3s2th.jpg",
+        "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428130/Buggies_punta_cana_wcqwdl.jpg",
+      ],
       schedule: {
         mon: ["08:00", "13:00"],
         tue: ["08:00", "13:00"],
@@ -795,6 +845,7 @@ function defaultTourCatalog() {
       key: "samana_temporada",
       id: "tour_samana_temporada",
       title: "Samaná Temporada",
+      bookingMode: "calendar",
       category: "paquetes_temporada",
       origins: ["santo_domingo", "las_terrenas"],
       description: "Paquete especial de temporada con transporte y experiencia guiada.",
@@ -809,6 +860,7 @@ function defaultTourCatalog() {
       reservationPolicy: "Sujeto a temporada y cupos disponibles.",
       paymentPolicy: "Avance obligatorio para confirmar cupo.",
       includes: ["Transporte", "Guía", "Almuerzo", "Actividad principal"],
+      aliases: ["samana", "samaná"],
       activeMonths: [1, 2, 3],
       schedule: {
         fri: ["05:30"],
@@ -819,7 +871,405 @@ function defaultTourCatalog() {
   ];
 }
 
-const TOURS = safeJson(process.env.TOUR_CATALOG_JSON, null) || defaultTourCatalog();
+function defaultVisualTourCatalog() {
+  return [
+    // =========================
+    // Tours desde Punta Cana
+    // =========================
+    {
+      key: "pc_scoobadoo",
+      id: "tour_pc_scoobadoo",
+      title: "Scoobadoo",
+      bookingMode: "catalog_only",
+      origins: ["punta_cana"],
+      collections: ["punta_cana"],
+      description: "Tour visual desde Punta Cana. Te muestro el flyer actualizado con los detalles.",
+      aliases: ["scoobadoo", "scubadoo"],
+      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427504/Scoobadoo_vjqbif.jpg",
+      mediaUrls: ["https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427504/Scoobadoo_vjqbif.jpg"],
+    },
+    {
+      key: "pc_polaris",
+      id: "tour_pc_polaris",
+      title: "Polaris",
+      bookingMode: "catalog_only",
+      origins: ["punta_cana"],
+      collections: ["punta_cana"],
+      description: "Tour visual desde Punta Cana. Te muestro el flyer actualizado con los detalles.",
+      aliases: ["polaris punta cana", "polaris"],
+      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427504/Polaris_hgbvqi.jpg",
+      mediaUrls: ["https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427504/Polaris_hgbvqi.jpg"],
+    },
+    {
+      key: "pc_maroca",
+      id: "tour_pc_maroca",
+      title: "Maroca",
+      bookingMode: "catalog_only",
+      origins: ["punta_cana"],
+      collections: ["punta_cana"],
+      description: "Tour visual desde Punta Cana. Te muestro el flyer actualizado con los detalles.",
+      aliases: ["maroca"],
+      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427503/Maroca_hzzyps.jpg",
+      mediaUrls: ["https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427503/Maroca_hzzyps.jpg"],
+    },
+    {
+      key: "pc_jet_ski",
+      id: "tour_pc_jet_ski",
+      title: "Jet Ski",
+      bookingMode: "catalog_only",
+      origins: ["punta_cana"],
+      collections: ["punta_cana"],
+      description: "Tour visual desde Punta Cana. Te muestro el flyer actualizado con los detalles.",
+      aliases: ["jet ski", "jetski"],
+      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427503/Jet-ski_kfxska.jpg",
+      mediaUrls: ["https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427503/Jet-ski_kfxska.jpg"],
+    },
+    {
+      key: "pc_jet_cars",
+      id: "tour_pc_jet_cars",
+      title: "Jet Cars",
+      bookingMode: "catalog_only",
+      origins: ["punta_cana"],
+      collections: ["punta_cana"],
+      description: "Tour visual desde Punta Cana. Te muestro el flyer actualizado con los detalles.",
+      aliases: ["jet cars", "jet car"],
+      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427502/Jet-cars_pu2p3w.jpg",
+      mediaUrls: ["https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427502/Jet-cars_pu2p3w.jpg"],
+    },
+    {
+      key: "pc_horseback_riding",
+      id: "tour_pc_horseback_riding",
+      title: "Horseback Riding",
+      bookingMode: "catalog_only",
+      origins: ["punta_cana"],
+      collections: ["punta_cana"],
+      description: "Tour visual desde Punta Cana. Te muestro el flyer actualizado con los detalles.",
+      aliases: ["horseback riding", "caballos", "montar caballo", "paseo a caballo"],
+      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427501/Horseback_Riding_fwojde.jpg",
+      mediaUrls: ["https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427501/Horseback_Riding_fwojde.jpg"],
+    },
+    {
+      key: "pc_fourwheel",
+      id: "tour_pc_fourwheel",
+      title: "Fourwheel",
+      bookingMode: "catalog_only",
+      origins: ["punta_cana"],
+      collections: ["punta_cana", "marzo"],
+      description: "Tour visual desde Punta Cana. Te muestro el flyer actualizado con los detalles.",
+      aliases: ["fourwheel", "four wheel", "cuatrimoto"],
+      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427500/Fourwheel_cixu6i.jpg",
+      mediaUrls: [
+        "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427500/Fourwheel_cixu6i.jpg",
+        "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428133/Fourwheel_punta_cana_v8lw1l.jpg",
+      ],
+    },
+    {
+      key: "pc_dorado_park",
+      id: "tour_pc_dorado_park",
+      title: "Dorado Park",
+      bookingMode: "catalog_only",
+      origins: ["punta_cana"],
+      collections: ["punta_cana"],
+      description: "Tour visual desde Punta Cana. Te muestro el flyer actualizado con los detalles.",
+      aliases: ["dorado park"],
+      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427500/Dorado_Park_p8unjz.jpg",
+      mediaUrls: ["https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427500/Dorado_Park_p8unjz.jpg"],
+    },
+    {
+      key: "pc_dolphin_ocean_adventure",
+      id: "tour_pc_dolphin_ocean_adventure",
+      title: "Dolphin Ocean Adventure",
+      bookingMode: "catalog_only",
+      origins: ["punta_cana"],
+      collections: ["punta_cana"],
+      description: "Tour visual desde Punta Cana. Te muestro el flyer actualizado con los detalles.",
+      aliases: ["dolphin ocean adventure", "dolphin", "delfines"],
+      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427500/Dolphin_ocean_aventure_tzzspl.jpg",
+      mediaUrls: ["https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427500/Dolphin_ocean_aventure_tzzspl.jpg"],
+    },
+    {
+      key: "pc_coco_bongo",
+      id: "tour_pc_coco_bongo",
+      title: "Coco Bongo",
+      bookingMode: "catalog_only",
+      origins: ["punta_cana"],
+      collections: ["punta_cana"],
+      description: "Tour visual desde Punta Cana. Te muestro el flyer actualizado con los detalles.",
+      aliases: ["coco bongo"],
+      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427500/Coco_Bongo_dknp2w.jpg",
+      mediaUrls: ["https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427500/Coco_Bongo_dknp2w.jpg"],
+    },
+    {
+      key: "pc_cayo_new",
+      id: "tour_pc_cayo_new",
+      title: "Cayo New",
+      bookingMode: "catalog_only",
+      origins: ["punta_cana"],
+      collections: ["punta_cana"],
+      description: "Tour visual desde Punta Cana. Te muestro el flyer actualizado con los detalles.",
+      aliases: ["cayo new"],
+      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427500/Cayo_New_m0ke20.jpg",
+      mediaUrls: ["https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427500/Cayo_New_m0ke20.jpg"],
+    },
+    {
+      key: "pc_aqua_kart_polaris",
+      id: "tour_pc_aqua_kart_polaris",
+      title: "Aqua Kart + Polaris",
+      bookingMode: "catalog_only",
+      origins: ["punta_cana"],
+      collections: ["punta_cana"],
+      description: "Tour visual desde Punta Cana. Te muestro el flyer actualizado con los detalles.",
+      aliases: ["aqua kart polaris", "jet ski aqua kart polaris", "aqua kart + polaris"],
+      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427499/3-_Jet-sky_Aqua-kart_Polaris_lm2sht.jpg",
+      mediaUrls: ["https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427499/3-_Jet-sky_Aqua-kart_Polaris_lm2sht.jpg"],
+    },
+    {
+      key: "pc_aqua_kart",
+      id: "tour_pc_aqua_kart",
+      title: "Aqua Kart",
+      bookingMode: "catalog_only",
+      origins: ["punta_cana"],
+      collections: ["punta_cana", "semana_santa"],
+      description: "Tour visual desde Punta Cana. Te muestro el flyer actualizado con los detalles.",
+      aliases: ["aqua kart", "jet ski aqua kart"],
+      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427499/2_-Jet-skit_Aqua-kart_cxpyzj.jpg",
+      mediaUrls: [
+        "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427499/2_-Jet-skit_Aqua-kart_cxpyzj.jpg",
+        "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427801/Aqua-kart_krqxuj.jpg",
+      ],
+    },
+    {
+      key: "pc_boat_party",
+      id: "tour_pc_boat_party",
+      title: "Boat Party",
+      bookingMode: "catalog_only",
+      origins: ["punta_cana"],
+      collections: ["punta_cana"],
+      description: "Tour visual desde Punta Cana. Te muestro el flyer actualizado con los detalles.",
+      aliases: ["boat party", "party boat"],
+      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427499/Boat_Party_g3iycw.jpg",
+      mediaUrls: ["https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427499/Boat_Party_g3iycw.jpg"],
+    },
+
+    // =========================
+    // Tours de Marzo
+    // =========================
+    {
+      key: "marzo_santa_fe_full_day",
+      id: "tour_marzo_santa_fe_full_day",
+      title: "Santa Fe Full Day",
+      bookingMode: "catalog_only",
+      collections: ["marzo"],
+      description: "Tour especial del catálogo de marzo. Te muestro el flyer actualizado con los detalles.",
+      aliases: ["santa fe full day", "santa fe"],
+      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428140/Santa_Fe_full_day_k2twpq.jpg",
+      mediaUrls: ["https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428140/Santa_Fe_full_day_k2twpq.jpg"],
+    },
+    {
+      key: "marzo_rio_y_playas_san_juan",
+      id: "tour_marzo_rio_y_playas_san_juan",
+      title: "Río y Playas San Juan",
+      bookingMode: "catalog_only",
+      collections: ["marzo"],
+      description: "Tour especial del catálogo de marzo. Te muestro el flyer actualizado con los detalles.",
+      aliases: ["rio y playas san juan", "río y playas san juan", "san juan"],
+      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428139/Rio_y_playas_san_juan_ivhnev.jpg",
+      mediaUrls: ["https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428139/Rio_y_playas_san_juan_ivhnev.jpg"],
+    },
+    {
+      key: "marzo_parapente_jarabacoa",
+      id: "tour_marzo_parapente_jarabacoa",
+      title: "Parapente Jarabacoa",
+      bookingMode: "catalog_only",
+      collections: ["marzo"],
+      description: "Tour especial del catálogo de marzo. Te muestro el flyer actualizado con los detalles.",
+      aliases: ["parapente jarabacoa", "parapente"],
+      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428138/Parapente_Jarabacoa_itfvyv.jpg",
+      mediaUrls: ["https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428138/Parapente_Jarabacoa_itfvyv.jpg"],
+    },
+    {
+      key: "marzo_ocean_world_confresi",
+      id: "tour_marzo_ocean_world_confresi",
+      title: "Ocean World Confresí",
+      bookingMode: "catalog_only",
+      collections: ["marzo"],
+      description: "Tour especial del catálogo de marzo. Te muestro el flyer actualizado con los detalles.",
+      aliases: ["ocean world confresi", "ocean world confresí", "ocean world"],
+      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428138/Ocean_world_confresi_punta_cana_wdbjq8.jpg",
+      mediaUrls: ["https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428138/Ocean_world_confresi_punta_cana_wdbjq8.jpg"],
+    },
+    {
+      key: "marzo_jarabacoa_fourwheel",
+      id: "tour_marzo_jarabacoa_fourwheel",
+      title: "Jarabacoa Fourwheel",
+      bookingMode: "catalog_only",
+      collections: ["marzo"],
+      description: "Tour especial del catálogo de marzo. Te muestro el flyer actualizado con los detalles.",
+      aliases: ["jarabacoa fourwheel"],
+      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428136/Jarabacoa_Fourwheel_doakpy.jpg",
+      mediaUrls: ["https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428136/Jarabacoa_Fourwheel_doakpy.jpg"],
+    },
+    {
+      key: "marzo_jarabacoa_city_tours",
+      id: "tour_marzo_jarabacoa_city_tours",
+      title: "Jarabacoa City Tours",
+      bookingMode: "catalog_only",
+      collections: ["marzo"],
+      description: "Tour especial del catálogo de marzo. Te muestro el flyer actualizado con los detalles.",
+      aliases: ["jarabacoa city tours"],
+      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428135/Jarabacoa_City_Tours_lzxkux.jpg",
+      mediaUrls: ["https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428135/Jarabacoa_City_Tours_lzxkux.jpg"],
+    },
+    {
+      key: "marzo_jarabacoa_city_polaris",
+      id: "tour_marzo_jarabacoa_city_polaris",
+      title: "Jarabacoa City Polaris",
+      bookingMode: "catalog_only",
+      collections: ["marzo"],
+      description: "Tour especial del catálogo de marzo. Te muestro el flyer actualizado con los detalles.",
+      aliases: ["jarabacoa city polaris"],
+      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428134/Jarabacoa_city_polaris_y7aea1.jpg",
+      mediaUrls: ["https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428134/Jarabacoa_city_polaris_y7aea1.jpg"],
+    },
+    {
+      key: "marzo_cayo_arena",
+      id: "tour_marzo_cayo_arena",
+      title: "Cayo Arena",
+      bookingMode: "catalog_only",
+      collections: ["marzo"],
+      description: "Tour especial del catálogo de marzo. Te muestro el flyer actualizado con los detalles.",
+      aliases: ["cayo arena"],
+      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428132/Cayo_arena_twyhw9.jpg",
+      mediaUrls: ["https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428132/Cayo_arena_twyhw9.jpg"],
+    },
+    {
+      key: "marzo_ballenas_jorobada",
+      id: "tour_marzo_ballenas_jorobada",
+      title: "Ballenas Jorobada",
+      bookingMode: "catalog_only",
+      collections: ["marzo"],
+      description: "Tour especial del catálogo de marzo. Te muestro el flyer actualizado con los detalles.",
+      aliases: ["ballenas jorobada", "ballenas jorobadas"],
+      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428131/Ballenas_Jorobada_rv0ioc.jpg",
+      mediaUrls: ["https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428131/Ballenas_Jorobada_rv0ioc.jpg"],
+    },
+    {
+      key: "marzo_cayo_levantado",
+      id: "tour_marzo_cayo_levantado",
+      title: "Cayo Levantado",
+      bookingMode: "catalog_only",
+      collections: ["marzo"],
+      description: "Tour especial del catálogo de marzo. Te muestro el flyer actualizado con los detalles.",
+      aliases: ["cayo levantado"],
+      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428131/Cayo_levantado_mxh6gv.jpg",
+      mediaUrls: ["https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428131/Cayo_levantado_mxh6gv.jpg"],
+    },
+
+    // =========================
+    // Tours Semana Santa
+    // =========================
+    {
+      key: "ss_polaris",
+      id: "tour_ss_polaris",
+      title: "Polaris Semana Santa",
+      bookingMode: "catalog_only",
+      collections: ["semana_santa"],
+      description: "Tour especial de Semana Santa. Te muestro el flyer actualizado con los detalles.",
+      aliases: ["polaris semana santa"],
+      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427803/Polaris_mlhvmz.jpg",
+      mediaUrls: ["https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427803/Polaris_mlhvmz.jpg"],
+    },
+    {
+      key: "ss_playa_dominicus",
+      id: "tour_ss_playa_dominicus",
+      title: "Playa Dominicus",
+      bookingMode: "catalog_only",
+      collections: ["semana_santa"],
+      description: "Tour especial de Semana Santa. Te muestro el flyer actualizado con los detalles.",
+      aliases: ["playa dominicus", "dominicus"],
+      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427803/Playa_Dominicus_uj7pg0.jpg",
+      mediaUrls: ["https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427803/Playa_Dominicus_uj7pg0.jpg"],
+    },
+    {
+      key: "ss_jet_ski",
+      id: "tour_ss_jet_ski",
+      title: "Jet Ski Semana Santa",
+      bookingMode: "catalog_only",
+      collections: ["semana_santa"],
+      description: "Tour especial de Semana Santa. Te muestro el flyer actualizado con los detalles.",
+      aliases: ["jet ski semana santa"],
+      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427802/Jet-ski_wr0dk5.jpg",
+      mediaUrls: ["https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427802/Jet-ski_wr0dk5.jpg"],
+    },
+    {
+      key: "ss_aqua_kart",
+      id: "tour_ss_aqua_kart",
+      title: "Aqua Kart Semana Santa",
+      bookingMode: "catalog_only",
+      collections: ["semana_santa"],
+      description: "Tour especial de Semana Santa. Te muestro el flyer actualizado con los detalles.",
+      aliases: ["aqua kart semana santa"],
+      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427801/Aqua-kart_krqxuj.jpg",
+      mediaUrls: ["https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427801/Aqua-kart_krqxuj.jpg"],
+    },
+  ];
+}
+
+function normalizeTourItem(item) {
+  const t = { ...(item || {}) };
+
+  t.key = String(t.key || "").trim();
+  t.id = String(t.id || "").trim();
+  t.title = String(t.title || "").trim();
+  t.bookingMode = String(
+    t.bookingMode || (t.schedule ? "calendar" : "catalog_only")
+  ).trim();
+
+  t.origins = uniqueStrings(t.origins);
+  t.collections = uniqueStrings(t.collections);
+  t.aliases = uniqueStrings([...(t.aliases || []), t.title, t.key.replace(/_/g, " ")]);
+  t.mediaUrls = uniqueStrings([...(t.mediaUrls || []), t.coverImageUrl]);
+  t.coverImageUrl = t.coverImageUrl || t.mediaUrls[0] || "";
+
+  if (!Array.isArray(t.includes)) t.includes = t.includes ? [String(t.includes)] : [];
+
+  return t;
+}
+
+function mergeTourCatalogs(items) {
+  const map = new Map();
+
+  for (const raw of items || []) {
+    const item = normalizeTourItem(raw);
+    if (!item.key) continue;
+
+    const prev = map.get(item.key);
+    if (!prev) {
+      map.set(item.key, item);
+      continue;
+    }
+
+    map.set(item.key, normalizeTourItem({
+      ...prev,
+      ...item,
+      origins: uniqueStrings([...(prev.origins || []), ...(item.origins || [])]),
+      collections: uniqueStrings([...(prev.collections || []), ...(item.collections || [])]),
+      aliases: uniqueStrings([...(prev.aliases || []), ...(item.aliases || [])]),
+      mediaUrls: uniqueStrings([...(prev.mediaUrls || []), ...(item.mediaUrls || [])]),
+      includes: Array.isArray(item.includes) && item.includes.length ? item.includes : prev.includes,
+      coverImageUrl: item.coverImageUrl || prev.coverImageUrl,
+    }));
+  }
+
+  return Array.from(map.values());
+}
+
+const ENV_TOURS = safeJson(process.env.TOUR_CATALOG_JSON, null);
+const TOURS = mergeTourCatalogs([
+  ...(Array.isArray(ENV_TOURS) ? ENV_TOURS : defaultTourCatalog()),
+  ...defaultVisualTourCatalog(),
+]);
+
 const TOUR_ID_TO_KEY = Object.fromEntries(TOURS.map((t) => [t.id, t.key]));
 
 function getServiceLineByKey(key) {
@@ -838,6 +1288,10 @@ function getCategoryByKey(key) {
   return TOUR_CATEGORIES.find((c) => c.key === key) || null;
 }
 
+function getCollectionByKey(key) {
+  return TOUR_COLLECTIONS.find((c) => c.key === key) || null;
+}
+
 function getTourByKey(key) {
   return TOURS.find((t) => t.key === key) || null;
 }
@@ -847,7 +1301,11 @@ function getToursByCategory(categoryKey) {
 }
 
 function getToursByOrigin(originKey) {
-  return TOURS.filter((t) => !Array.isArray(t.origins) || t.origins.includes(originKey));
+  return TOURS.filter((t) => Array.isArray(t.origins) && t.origins.includes(originKey));
+}
+
+function getToursByCollection(collectionKey) {
+  return TOURS.filter((t) => Array.isArray(t.collections) && t.collections.includes(collectionKey));
 }
 
 function normalizeText(t) {
@@ -1149,6 +1607,16 @@ function detectCatalogRequest(textNorm) {
   );
 }
 
+function detectTourCollectionFromUser(text) {
+  const t = normalizeText(text);
+
+  if (TOUR_COLLECTION_ID_TO_KEY[text]) return TOUR_COLLECTION_ID_TO_KEY[text];
+  if (t === "marzo" || t.includes("tours de marzo") || t.includes("tour de marzo")) return "marzo";
+  if (t.includes("semana santa")) return "semana_santa";
+
+  return null;
+}
+
 function detectServiceLineFromUser(text) {
   const t = normalizeText(text);
 
@@ -1315,10 +1783,16 @@ function detectTourKeyFromUser(text) {
   if (TOUR_ID_TO_KEY[text]) return TOUR_ID_TO_KEY[text];
 
   for (const tour of TOURS) {
-    const nt = normalizeText(tour.title);
-    if (t === nt || t.includes(nt)) return tour.key;
+    const titleNorm = normalizeText(tour.title);
+    if (titleNorm && (t === titleNorm || t.includes(titleNorm))) return tour.key;
+
+    for (const alias of tour.aliases || []) {
+      const aliasNorm = normalizeText(alias);
+      if (aliasNorm && (t === aliasNorm || t.includes(aliasNorm))) return tour.key;
+    }
+
     const keyNorm = normalizeText(tour.key.replace(/_/g, " "));
-    if (t.includes(keyNorm)) return tour.key;
+    if (keyNorm && t.includes(keyNorm)) return tour.key;
   }
 
   if (t.includes("saona")) return "isla_saona";
@@ -1361,6 +1835,25 @@ function parsePassengerCount(text) {
   return null;
 }
 
+function isCalendarTour(tour) {
+  return String(tour?.bookingMode || "calendar") === "calendar";
+}
+
+function isCatalogOnlyTour(tour) {
+  return !isCalendarTour(tour);
+}
+
+function buildCatalogOnlyTourInfoText(tour) {
+  if (!tour) return "";
+
+  return (
+    `🌴 *${tour.title}*\n` +
+    `${tour.description || "Te comparto el flyer actualizado con los detalles visuales del tour."}\n\n` +
+    `🖼️ Revisa el flyer que te envié para ver la información del tour.\n` +
+    `📌 Si deseas cotizar o reservar, dime la *fecha* o *temporada* que te interesa.`
+  );
+}
+
 function buildTourInfoText(tour) {
   if (!tour) return "";
 
@@ -1380,6 +1873,7 @@ function buildTourInfoText(tour) {
 
 function buildTourFaqReply(tour, textNorm) {
   if (!tour) return "";
+  if (isCatalogOnlyTour(tour)) return buildCatalogOnlyTourInfoText(tour);
 
   const parts = [`🌴 *${tour.title}*`];
 
@@ -1471,7 +1965,7 @@ function categoriesEmojiText() {
     `⛰️ Montañas\n` +
     `✨ Excursiones especiales\n` +
     `🎒 Paquetes de temporada\n\n` +
-    `O si prefieres, primero elige tu *origen de salida* y te muestro los tours disponibles.`
+    `También puedo mostrarte *Tours de Marzo* o *Tours Semana Santa* si lo escribes así.`
   );
 }
 
@@ -1488,7 +1982,7 @@ function mainMenuText() {
     `👤 Hablar con un asesor\n` +
     `📍 Ubicación y contacto\n` +
     `📄 Catálogo PDF\n\n` +
-    `Elige una opción del menú o escríbeme directamente lo que buscas.`
+    `También puedes escribirme cosas como *"Tours desde Punta Cana"*, *"Tours de Marzo"* o *"Semana Santa"* y te muestro opciones.`
   );
 }
 
@@ -1499,6 +1993,28 @@ function buildLocationContactText() {
     `${addressLine}` +
     `${MARKET_CONTACT_TEXT}`
   ).trim();
+}
+
+function buildRowsSections(rows, baseTitle) {
+  const chunks = chunkArray(rows, 10);
+  return chunks.map((chunk, idx) => ({
+    title: waRowTitle(chunks.length > 1 ? `${baseTitle} ${idx + 1}` : baseTitle),
+    rows: chunk,
+  }));
+}
+
+function tourListDescription(tour) {
+  if (!tour) return "Consultar";
+
+  if (isCalendarTour(tour) && Number.isFinite(Number(tour.basePriceAdult))) {
+    return `${PRICE_CURRENCY}${tour.basePriceAdult} adulto • ${tour.durationLabel || "Consultar"}`.slice(0, 72);
+  }
+
+  if (tour.collections?.includes("semana_santa")) return "Especial Semana Santa".slice(0, 72);
+  if (tour.collections?.includes("marzo")) return "Especial de marzo".slice(0, 72);
+  if (tour.origins?.includes("punta_cana")) return "Desde Punta Cana • Ver flyer".slice(0, 72);
+
+  return "Ver flyer y detalles".slice(0, 72);
 }
 
 // =========================
@@ -1518,6 +2034,34 @@ async function sendWhatsAppText(to, text, reportSource = "BOT") {
     body: String(text),
     source: reportSource,
     kind: "TEXT",
+  });
+}
+
+async function sendWhatsAppImage(to, imageUrl, caption = "", reportSource = "BOT") {
+  if (!imageUrl) throw new Error("imageUrl is required");
+
+  const url = `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`;
+  await axios.post(
+    url,
+    {
+      messaging_product: "whatsapp",
+      to,
+      type: "image",
+      image: {
+        link: imageUrl,
+        caption: caption || undefined,
+      },
+    },
+    { headers: { Authorization: `Bearer ${WA_TOKEN}` } }
+  );
+
+  await bothubReportMessage({
+    direction: "OUTBOUND",
+    to: String(to),
+    body: caption || "Imagen enviada",
+    source: reportSource,
+    kind: "IMAGE",
+    meta: { link: imageUrl },
   });
 }
 
@@ -1583,164 +2127,140 @@ async function sendReminderWhatsAppToBestTarget(priv, fallbackPhoneDigits, text)
   return { ok: false, tried, error: lastErr?.response?.data || lastErr?.message || lastErr };
 }
 
-async function sendServiceLinesList(to) {
+async function sendInteractiveList(to, { headerText, bodyText, buttonText, sections, renderedBody, meta }) {
   const url = `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`;
+
+  await axios.post(
+    url,
+    {
+      messaging_product: "whatsapp",
+      to,
+      type: "interactive",
+      interactive: {
+        type: "list",
+        header: { type: "text", text: headerText },
+        body: { text: bodyText },
+        footer: { text: BUSINESS_NAME },
+        action: { button: buttonText, sections },
+      },
+    },
+    { headers: { Authorization: `Bearer ${WA_TOKEN}` } }
+  );
+
+  await bothubReportMessage({
+    direction: "OUTBOUND",
+    to: String(to),
+    body: renderedBody,
+    source: "BOT",
+    kind: "LIST",
+    meta,
+  });
+}
+
+async function sendTourPresentation(to, tour) {
+  if (!tour) return;
+
+  if (tour.coverImageUrl) {
+    try {
+      await sendWhatsAppImage(to, tour.coverImageUrl, `🌴 ${tour.title}`, "BOT");
+    } catch (e) {
+      console.error("sendTourPresentation image error:", e?.response?.data || e?.message || e);
+    }
+  }
+
+  const text = isCatalogOnlyTour(tour) ? buildCatalogOnlyTourInfoText(tour) : buildTourInfoText(tour);
+  await sendWhatsAppText(to, text, "BOT");
+}
+
+async function sendServiceLinesList(to) {
   const rows = SERVICE_LINES.map((s) => ({
     id: s.id,
     title: serviceLineRowTitle(s),
     description: "",
   }));
 
-  await axios.post(
-    url,
-    {
-      messaging_product: "whatsapp",
-      to,
-      type: "interactive",
-      interactive: {
-        type: "list",
-        header: { type: "text", text: "Servicios disponibles" },
-        body: { text: "Selecciona el servicio que te interesa 👇" },
-        footer: { text: BUSINESS_NAME },
-        action: { button: "Ver opciones", sections: [{ title: "Servicios", rows }] },
-      },
-    },
-    { headers: { Authorization: `Bearer ${WA_TOKEN}` } }
-  );
-
+  const sections = [{ title: "Servicios", rows }];
   const rendered =
     `*Servicios disponibles*\nSelecciona el servicio que te interesa 👇\n\n` +
     rows.map((r) => `• [${r.id}] ${r.title}`).join("\n");
 
-  await bothubReportMessage({
-    direction: "OUTBOUND",
-    to: String(to),
-    body: rendered,
-    source: "BOT",
-    kind: "LIST",
+  await sendInteractiveList(to, {
+    headerText: "Servicios disponibles",
+    bodyText: "Selecciona el servicio que te interesa 👇",
+    buttonText: "Ver opciones",
+    sections,
+    renderedBody: rendered,
     meta: { rows },
   });
 }
 
 async function sendTourOriginsList(to) {
-  const url = `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`;
   const rows = TOUR_ORIGINS.map((o) => ({
     id: o.id,
     title: waRowTitle(o.title),
     description: "",
   }));
 
-  await axios.post(
-    url,
-    {
-      messaging_product: "whatsapp",
-      to,
-      type: "interactive",
-      interactive: {
-        type: "list",
-        header: { type: "text", text: "Origen del tour" },
-        body: { text: "¿Desde dónde deseas salir? 👇" },
-        footer: { text: BUSINESS_NAME },
-        action: { button: "Elegir origen", sections: [{ title: "Salidas", rows }] },
-      },
-    },
-    { headers: { Authorization: `Bearer ${WA_TOKEN}` } }
-  );
-
+  const sections = [{ title: "Salidas", rows }];
   const rendered =
     `*Origen del tour*\n¿Desde dónde deseas salir? 👇\n\n` +
     rows.map((r) => `• [${r.id}] ${r.title}`).join("\n");
 
-  await bothubReportMessage({
-    direction: "OUTBOUND",
-    to: String(to),
-    body: rendered,
-    source: "BOT",
-    kind: "LIST",
+  await sendInteractiveList(to, {
+    headerText: "Origen del tour",
+    bodyText: "¿Desde dónde deseas salir? 👇",
+    buttonText: "Elegir origen",
+    sections,
+    renderedBody: rendered,
     meta: { rows },
   });
 }
 
 async function sendPackageDestinationsList(to) {
-  const url = `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`;
   const rows = PACKAGE_DESTINATIONS.map((d) => ({
     id: d.id,
     title: waRowTitle(d.title),
     description: "",
   }));
 
-  await axios.post(
-    url,
-    {
-      messaging_product: "whatsapp",
-      to,
-      type: "interactive",
-      interactive: {
-        type: "list",
-        header: { type: "text", text: "Paquetes vacacionales" },
-        body: { text: "Elige el destino que te interesa 👇" },
-        footer: { text: BUSINESS_NAME },
-        action: { button: "Ver destinos", sections: [{ title: "Destinos", rows }] },
-      },
-    },
-    { headers: { Authorization: `Bearer ${WA_TOKEN}` } }
-  );
-
+  const sections = [{ title: "Destinos", rows }];
   const rendered =
     `*Paquetes vacacionales*\nElige el destino que te interesa 👇\n\n` +
     rows.map((r) => `• [${r.id}] ${r.title}`).join("\n");
 
-  await bothubReportMessage({
-    direction: "OUTBOUND",
-    to: String(to),
-    body: rendered,
-    source: "BOT",
-    kind: "LIST",
+  await sendInteractiveList(to, {
+    headerText: "Paquetes vacacionales",
+    bodyText: "Elige el destino que te interesa 👇",
+    buttonText: "Ver destinos",
+    sections,
+    renderedBody: rendered,
     meta: { rows },
   });
 }
 
 async function sendCategoriesList(to) {
-  const url = `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`;
   const rows = TOUR_CATEGORIES.map((c) => ({
     id: c.id,
     title: waRowTitle(c.title),
     description: "",
   }));
 
-  await axios.post(
-    url,
-    {
-      messaging_product: "whatsapp",
-      to,
-      type: "interactive",
-      interactive: {
-        type: "list",
-        header: { type: "text", text: "Categorías de tours" },
-        body: { text: "Selecciona una categoría para ver opciones disponibles 👇" },
-        footer: { text: BUSINESS_NAME },
-        action: { button: "Ver categorías", sections: [{ title: "Categorías", rows }] },
-      },
-    },
-    { headers: { Authorization: `Bearer ${WA_TOKEN}` } }
-  );
-
+  const sections = [{ title: "Categorías", rows }];
   const rendered =
     `*Categorías de tours*\nSelecciona una categoría para ver opciones 👇\n\n` +
     rows.map((r) => `• [${r.id}] ${r.title}`).join("\n");
 
-  await bothubReportMessage({
-    direction: "OUTBOUND",
-    to: String(to),
-    body: rendered,
-    source: "BOT",
-    kind: "LIST",
+  await sendInteractiveList(to, {
+    headerText: "Categorías de tours",
+    bodyText: "Selecciona una categoría para ver opciones disponibles 👇",
+    buttonText: "Ver categorías",
+    sections,
+    renderedBody: rendered,
     meta: { rows },
   });
 }
 
 async function sendToursListByCategory(to, categoryKey) {
-  const url = `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`;
   const category = getCategoryByKey(categoryKey);
   const tours = getToursByCategory(categoryKey);
 
@@ -1749,45 +2269,28 @@ async function sendToursListByCategory(to, categoryKey) {
     return;
   }
 
-  const rows = tours.slice(0, 10).map((t) => ({
+  const rows = tours.map((t) => ({
     id: t.id,
     title: waRowTitle(t.title),
-    description: `${PRICE_CURRENCY}${t.basePriceAdult} adulto • ${t.durationLabel}`.slice(0, 72),
+    description: tourListDescription(t),
   }));
 
-  await axios.post(
-    url,
-    {
-      messaging_product: "whatsapp",
-      to,
-      type: "interactive",
-      interactive: {
-        type: "list",
-        header: { type: "text", text: category.title },
-        body: { text: "Elige un tour para ver precio, detalles y reservar 👇" },
-        footer: { text: BUSINESS_NAME },
-        action: { button: "Ver tours", sections: [{ title: waRowTitle(category.title), rows }] },
-      },
-    },
-    { headers: { Authorization: `Bearer ${WA_TOKEN}` } }
-  );
-
+  const sections = buildRowsSections(rows, category.title);
   const rendered =
     `*${category.title}*\nElige un tour para ver precio, detalles y reservar 👇\n\n` +
     rows.map((r) => `• [${r.id}] ${r.title} — ${r.description}`).join("\n");
 
-  await bothubReportMessage({
-    direction: "OUTBOUND",
-    to: String(to),
-    body: rendered,
-    source: "BOT",
-    kind: "LIST",
+  await sendInteractiveList(to, {
+    headerText: category.title,
+    bodyText: "Elige un tour para ver precio, detalles y reservar 👇",
+    buttonText: "Ver tours",
+    sections,
+    renderedBody: rendered,
     meta: { rows, category: categoryKey },
   });
 }
 
 async function sendToursListByOrigin(to, originKey) {
-  const url = `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`;
   const origin = getOriginByKey(originKey);
   const tours = getToursByOrigin(originKey);
 
@@ -1796,40 +2299,54 @@ async function sendToursListByOrigin(to, originKey) {
     return;
   }
 
-  const rows = tours.slice(0, 10).map((t) => ({
+  const rows = tours.map((t) => ({
     id: t.id,
     title: waRowTitle(t.title),
-    description: `${PRICE_CURRENCY}${t.basePriceAdult} adulto • ${t.durationLabel}`.slice(0, 72),
+    description: tourListDescription(t),
   }));
 
-  await axios.post(
-    url,
-    {
-      messaging_product: "whatsapp",
-      to,
-      type: "interactive",
-      interactive: {
-        type: "list",
-        header: { type: "text", text: `Salidas desde ${origin.title}` },
-        body: { text: "Elige un tour para ver detalles y reservar 👇" },
-        footer: { text: BUSINESS_NAME },
-        action: { button: "Ver tours", sections: [{ title: waRowTitle(origin.title), rows }] },
-      },
-    },
-    { headers: { Authorization: `Bearer ${WA_TOKEN}` } }
-  );
-
+  const sections = buildRowsSections(rows, origin.title);
   const rendered =
     `*Salidas desde ${origin.title}*\nElige un tour para ver detalles y reservar 👇\n\n` +
     rows.map((r) => `• [${r.id}] ${r.title} — ${r.description}`).join("\n");
 
-  await bothubReportMessage({
-    direction: "OUTBOUND",
-    to: String(to),
-    body: rendered,
-    source: "BOT",
-    kind: "LIST",
+  await sendInteractiveList(to, {
+    headerText: `Salidas desde ${origin.title}`,
+    bodyText: "Elige un tour para ver detalles y reservar 👇",
+    buttonText: "Ver tours",
+    sections,
+    renderedBody: rendered,
     meta: { rows, origin: originKey },
+  });
+}
+
+async function sendToursListByCollection(to, collectionKey) {
+  const collection = getCollectionByKey(collectionKey);
+  const tours = getToursByCollection(collectionKey);
+
+  if (!collection || !tours.length) {
+    await sendWhatsAppText(to, "No encontré tours para esa colección ahora mismo 🙏");
+    return;
+  }
+
+  const rows = tours.map((t) => ({
+    id: t.id,
+    title: waRowTitle(t.title),
+    description: tourListDescription(t),
+  }));
+
+  const sections = buildRowsSections(rows, collection.title);
+  const rendered =
+    `*${collection.title}*\nElige un tour para ver su flyer y más detalles 👇\n\n` +
+    rows.map((r) => `• [${r.id}] ${r.title} — ${r.description}`).join("\n");
+
+  await sendInteractiveList(to, {
+    headerText: collection.title,
+    bodyText: "Elige un tour para ver su flyer y más detalles 👇",
+    buttonText: "Ver tours",
+    sections,
+    renderedBody: rendered,
+    meta: { rows, collection: collectionKey },
   });
 }
 
@@ -1964,6 +2481,7 @@ function buildCandidateDeparturesForTour({ tour, fromISO, toISO }) {
 async function getAvailableSlotsTool({ tour_key, from, to }) {
   const tour = getTourByKey(tour_key);
   if (!tour) throw new Error("Tour inválido");
+  if (isCatalogOnlyTour(tour)) throw new Error("Este tour se gestiona por cotización manual");
 
   const calendar = getCalendarClient();
   const events = await listReservationEvents(calendar, from, to);
@@ -1987,6 +2505,7 @@ async function getAvailableSlotsTool({ tour_key, from, to }) {
 async function getRemainingSeatsForSlot({ tour_key, slot_start, slot_end }) {
   const tour = getTourByKey(tour_key);
   if (!tour) throw new Error("Tour inválido");
+  if (isCatalogOnlyTour(tour)) throw new Error("Este tour se gestiona por cotización manual");
 
   const calendar = getCalendarClient();
   const events = await listReservationEvents(calendar, slot_start, slot_end);
@@ -2013,6 +2532,7 @@ async function createReservationTool({
   const calendar = getCalendarClient();
   const tour = getTourByKey(tour_key);
   if (!tour) throw new Error("Tour inválido");
+  if (isCatalogOnlyTour(tour)) throw new Error("Este tour no usa reserva automática");
   if (!slot_start || !slot_end) throw new Error("Missing slot_start/slot_end");
 
   const passengersTotal = Number(adults || 0) + Number(children || 0);
@@ -2095,6 +2615,7 @@ async function rescheduleReservationTool({
   const calendar = getCalendarClient();
   const tour = getTourByKey(tour_key);
   if (!tour) throw new Error("Tour inválido");
+  if (isCatalogOnlyTour(tour)) throw new Error("Este tour no usa reprogramación automática");
   if (!new_start || !new_end) throw new Error("Missing new_start/new_end");
 
   const passengersTotal = Number(adults || 0) + Number(children || 0);
@@ -2477,15 +2998,15 @@ Servicios:
 - Paquetes vacacionales
 
 Reglas:
-- Para tours, no inventes disponibilidad. Solo ofrece salidas reales usando get_available_departures.
-- Para tours, si van a reservar, necesitas: tour, fecha, cantidad de adultos, cantidad de niños, punto de salida, ciudad, nombre y teléfono.
-- Para boletos aéreos, hoteles, seguros, traslados y paquetes vacacionales NO inventes precios. Debes pedir datos básicos y explicar que un agente confirmará.
+- Para tours con reserva automática, no inventes disponibilidad. Solo ofrece salidas reales usando get_available_departures.
+- Para tours con reserva automática, si van a reservar, necesitas: tour, fecha, cantidad de adultos, cantidad de niños, punto de salida, ciudad, nombre y teléfono.
+- Para tours tipo catálogo, boletos aéreos, hoteles, seguros, traslados y paquetes vacacionales NO inventes precios. Debes pedir datos básicos y explicar que un agente confirmará.
 - Responde corto, claro y orientado a convertir.
 - Fecha actual (zona ${BUSINESS_TIMEZONE}): ${todayStr}.
 - No ofrezcas salidas que inicien en menos de ${MIN_BOOKING_LEAD_MIN} minutos desde ahora.
 
 Tours disponibles:
-${TOURS.map((t) => `- ${t.title} (${t.category})`).join("\n")}
+${TOURS.map((t) => `- ${t.title} (${t.bookingMode})`).join("\n")}
 
 ${extraSystem}
 Tel usuario: ${userPhone}.
@@ -2854,6 +3375,7 @@ app.post("/webhook", async (req, res) => {
     const detectedCategoryEarly = detectCategoryKeyFromUser(userText);
     const detectedTourEarly = detectTourKeyFromUser(userText);
     const detectedRangeEarly = parseDateRangeFromText(userText);
+    const detectedCollectionEarly = detectTourCollectionFromUser(userText);
 
     const hasEarlyIntent =
       !!detectedServiceLineEarly ||
@@ -2861,6 +3383,7 @@ app.post("/webhook", async (req, res) => {
       !!detectedCategoryEarly ||
       !!detectedTourEarly ||
       !!detectedRangeEarly ||
+      !!detectedCollectionEarly ||
       tNorm.includes("tour") ||
       tNorm.includes("excursion") ||
       tNorm.includes("excursión") ||
@@ -2913,8 +3436,13 @@ app.post("/webhook", async (req, res) => {
       }
 
       if (wantsCancel) {
-        await cancelReservationTool({ reservation_id: booking.reservation_id, reason: userText });
-        await sendWhatsAppText(from, `✅ Listo. Tu reserva fue cancelada.\n\nSi deseas una nueva, escribe *"Nueva reserva"* o vuelve al *menú*.`);
+        try {
+          await cancelReservationTool({ reservation_id: booking.reservation_id, reason: userText });
+          await sendWhatsAppText(from, `✅ Listo. Tu reserva fue cancelada.\n\nSi deseas una nueva, escribe *"Nueva reserva"* o vuelve al *menú*.`);
+        } catch (e) {
+          console.error("cancelReservationTool error:", e?.response?.data || e?.message || e);
+          await sendWhatsAppText(from, `No pude cancelar la reserva automáticamente 🙏 Ya pasé tu solicitud al equipo para revisión manual.`);
+        }
 
         clearIntakeFlow(session);
         session.lastBooking = null;
@@ -2978,7 +3506,7 @@ app.post("/webhook", async (req, res) => {
     }
 
     // =========================
-    // TOURS FLOW
+    // TOURS FLOW - ORIGEN
     // =========================
     if (session.state === "await_tour_origin") {
       const originKey = detectOriginKeyFromUser(userText);
@@ -3000,6 +3528,91 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
+    // =========================
+    // TOURS FLOW - FECHA
+    // =========================
+    if (session.state === "await_day") {
+      const tour = getTourByKey(session.pendingTour);
+
+      if (!tour) {
+        clearIntakeFlow(session);
+        await sendWhatsAppText(from, `Necesito que primero elijas el tour para continuar 🙏`);
+        await sendWhatsAppText(from, mainMenuText());
+        await sendServiceLinesList(from);
+        return res.sendStatus(200);
+      }
+
+      if (isCatalogOnlyTour(tour)) {
+        if (tNorm.length < 2) {
+          await sendWhatsAppText(
+            from,
+            `Indícame la *fecha* o *temporada* que te interesa para *${tour.title}*.\nEj: "mañana", "sábado", "semana santa" o "en julio".`
+          );
+          return res.sendStatus(200);
+        }
+
+        session.pendingTravelDateText = userText;
+        session.state = "await_catalog_tour_people";
+        await sendWhatsAppText(from, `Perfecto 👍 ¿Para cuántas *personas* sería *${tour.title}*?`);
+        return res.sendStatus(200);
+      }
+
+      const range = parseDateRangeFromText(userText);
+      if (!range) {
+        await sendWhatsAppText(
+          from,
+          `Para elegir la fecha de *${tour.title}*, puedes escribir: "mañana", "viernes", "próximo martes", "14 de junio" o "en julio".`
+        );
+        return res.sendStatus(200);
+      }
+
+      try {
+        const slots = await getAvailableSlotsTool({
+          tour_key: session.pendingTour,
+          from: range.from,
+          to: range.to,
+        });
+
+        if (!slots.length) {
+          await sendWhatsAppText(
+            from,
+            `No veo salidas disponibles para ese rango 🙏\nDime otro día o mes y te comparto más opciones.`
+          );
+          return res.sendStatus(200);
+        }
+
+        session.pendingRange = range;
+        session.lastSlots = slots;
+        session.state = "await_slot_choice";
+
+        const listText = formatSlotsList(session.pendingTour, slots, session);
+        await sendWhatsAppText(from, listText);
+        return res.sendStatus(200);
+      } catch (e) {
+        console.error("await_day availability error:", e?.response?.data || e?.message || e);
+
+        const summaryText = buildLeadSummary("Solicitud de tour con revisión manual", [
+          { label: "🧩 Servicio", value: serviceLineLabel("tours_rd") },
+          { label: "🌴 Tour", value: tour.title || "—" },
+          { label: "📅 Fecha solicitada", value: userText || "—" },
+          { label: "📞 WhatsApp", value: from || "—" },
+        ]);
+
+        await handoffToHumanTool({ summary: summaryText });
+        await notifyPersonalWhatsAppLeadSummary(summaryText, from);
+
+        await sendWhatsAppText(
+          from,
+          `Ahora mismo no pude consultar la disponibilidad automática para *${tour.title}* 🙏\nYa pasé tu solicitud al equipo y te contactarán para confirmarte opciones.`
+        );
+        clearIntakeFlow(session);
+        return res.sendStatus(200);
+      }
+    }
+
+    // =========================
+    // TOURS FLOW - ELECCIÓN DE HORARIO
+    // =========================
     if (session.state === "await_slot_choice" && session.lastSlots?.length) {
       if (["reiniciar", "reset", "resetear", "empezar", "inicio"].some((k) => tNorm.includes(k))) {
         clearIntakeFlow(session);
@@ -3045,20 +3658,32 @@ app.post("/webhook", async (req, res) => {
       session.selectedSlot = picked;
 
       if (session.reschedule?.active && session.reschedule.reservation_id) {
-        await rescheduleReservationTool({
-          reservation_id: session.reschedule.reservation_id,
-          new_slot_id: picked.slot_id,
-          new_start: picked.start,
-          new_end: picked.end,
-          tour_key: session.pendingTour || session.reschedule.tour_key,
-          passenger_name: session.reschedule.passenger_name,
-          phone: session.reschedule.phone || from,
-          adults: session.reschedule.adults,
-          children: session.reschedule.children,
-          city: session.reschedule.city,
-          pickup: session.reschedule.pickup,
-          wa_id: from,
-        });
+        try {
+          await rescheduleReservationTool({
+            reservation_id: session.reschedule.reservation_id,
+            new_slot_id: picked.slot_id,
+            new_start: picked.start,
+            new_end: picked.end,
+            tour_key: session.pendingTour || session.reschedule.tour_key,
+            passenger_name: session.reschedule.passenger_name,
+            phone: session.reschedule.phone || from,
+            adults: session.reschedule.adults,
+            children: session.reschedule.children,
+            city: session.reschedule.city,
+            pickup: session.reschedule.pickup,
+            wa_id: from,
+          });
+        } catch (e) {
+          console.error("rescheduleReservationTool error:", e?.response?.data || e?.message || e);
+          await sendWhatsAppText(
+            from,
+            `No pude reprogramar automáticamente esa reserva 🙏\nYa pasé tu solicitud al equipo para revisión manual.`
+          );
+          clearIntakeFlow(session);
+          session.lastBooking = null;
+          session.reschedule = defaultSession().reschedule;
+          return res.sendStatus(200);
+        }
 
         session.lastBooking = {
           reservation_id: session.reschedule.reservation_id,
@@ -3195,21 +3820,49 @@ app.post("/webhook", async (req, res) => {
         Number(session.pendingAdults || 0) * Number(tour?.basePriceAdult || 0) +
         Number(session.pendingChildren || 0) * Number(tour?.basePriceChild || 0);
 
-      const booked = await createReservationTool({
-        passenger_name: session.pendingName,
-        phone: phoneDigits,
-        slot_id: session.selectedSlot.slot_id,
-        tour_key: session.pendingTour || session.selectedSlot.tour_key,
-        adults: session.pendingAdults || 0,
-        children: session.pendingChildren || 0,
-        city: session.pendingCity || "",
-        pickup: session.pendingPickup || "",
-        notes: "",
-        slot_start: session.selectedSlot.start,
-        slot_end: session.selectedSlot.end,
-        quote_total: quoteTotal,
-        wa_id: from,
-      });
+      let booked;
+      try {
+        booked = await createReservationTool({
+          passenger_name: session.pendingName,
+          phone: phoneDigits,
+          slot_id: session.selectedSlot.slot_id,
+          tour_key: session.pendingTour || session.selectedSlot.tour_key,
+          adults: session.pendingAdults || 0,
+          children: session.pendingChildren || 0,
+          city: session.pendingCity || "",
+          pickup: session.pendingPickup || "",
+          notes: "",
+          slot_start: session.selectedSlot.start,
+          slot_end: session.selectedSlot.end,
+          quote_total: quoteTotal,
+          wa_id: from,
+        });
+      } catch (e) {
+        console.error("createReservationTool error:", e?.response?.data || e?.message || e);
+
+        const summaryText = buildLeadSummary("Nueva solicitud de tour con revisión manual", [
+          { label: "🧩 Servicio", value: serviceLineLabel("tours_rd") },
+          { label: "🌴 Tour", value: tour?.title || "—" },
+          { label: "📅 Fecha", value: session.selectedSlot?.start ? formatDateInTZ(session.selectedSlot.start, BUSINESS_TIMEZONE) : "—" },
+          { label: "⏰ Hora", value: session.selectedSlot?.start ? formatTimeInTZ(session.selectedSlot.start, BUSINESS_TIMEZONE) : "—" },
+          { label: "👥 Pasajeros", value: `${Number(session.pendingAdults || 0) + Number(session.pendingChildren || 0)}` },
+          { label: "👤 Cliente", value: session.pendingName || "—" },
+          { label: "📞 Tel", value: phoneDigits || "—" },
+          { label: "📍 Ciudad", value: session.pendingCity || "—" },
+          { label: "🚐 Pickup", value: session.pendingPickup || "—" },
+        ]);
+
+        await handoffToHumanTool({ summary: summaryText });
+        await notifyPersonalWhatsAppLeadSummary(summaryText, phoneDigits);
+
+        await sendWhatsAppText(
+          from,
+          `No pude registrar la reserva automáticamente 🙏\nYa pasé tu solicitud al equipo para que la confirmen manualmente.`
+        );
+
+        clearIntakeFlow(session);
+        return res.sendStatus(200);
+      }
 
       await sendWhatsAppText(
         from,
@@ -3250,6 +3903,70 @@ app.post("/webhook", async (req, res) => {
       session.reschedule = defaultSession().reschedule;
       clearLeadOnBooking(session);
 
+      return res.sendStatus(200);
+    }
+
+    // =========================
+    // CATALOG-ONLY TOUR FLOW
+    // =========================
+    if (session.state === "await_catalog_tour_people") {
+      const pax = parsePassengerCount(userText);
+      if (pax === null || pax < 1) {
+        await sendWhatsAppText(from, `Indícame cuántas *personas* irían. Ej: 2`);
+        return res.sendStatus(200);
+      }
+
+      session.pendingPassengers = pax;
+      session.state = "await_catalog_tour_name";
+      await sendWhatsAppText(from, `Perfecto 👍 Ahora dime tu *nombre completo*.`);
+      return res.sendStatus(200);
+    }
+
+    if (session.state === "await_catalog_tour_name") {
+      if (tNorm.length < 3) {
+        await sendWhatsAppText(from, `Por favor, envíame tu *nombre completo* 🙂`);
+        return res.sendStatus(200);
+      }
+
+      session.pendingName = userText;
+      session.state = "await_catalog_tour_phone";
+      await sendWhatsAppText(from, `Gracias. Ahora envíame tu *número de teléfono* para pasarte con un asesor.`);
+      return res.sendStatus(200);
+    }
+
+    if (session.state === "await_catalog_tour_phone") {
+      const phoneDigits = userText.replace(/[^\d]/g, "");
+      if (phoneDigits.length < 8) {
+        await sendWhatsAppText(from, `Ese número parece incompleto 🙏\nEnvíamelo así: 829XXXXXXX`);
+        return res.sendStatus(200);
+      }
+
+      const tour = getTourByKey(session.pendingTour);
+      const summaryText = buildLeadSummary("Nueva solicitud de tour (catálogo visual)", [
+        { label: "🧩 Servicio", value: serviceLineLabel("tours_rd") },
+        { label: "🌴 Tour", value: tour?.title || "—" },
+        { label: "📅 Fecha / temporada", value: session.pendingTravelDateText || "—" },
+        { label: "👥 Personas", value: session.pendingPassengers || "—" },
+        { label: "👤 Cliente", value: session.pendingName || "—" },
+        { label: "📞 Tel", value: phoneDigits || "—" },
+      ]);
+
+      updateLead(session, {
+        tour_key: session.pendingTour || "",
+        quotePreview: summaryText,
+        converted: false,
+        followupSent: false,
+      });
+
+      await handoffToHumanTool({ summary: summaryText });
+      await notifyPersonalWhatsAppLeadSummary(summaryText, phoneDigits);
+
+      await sendWhatsAppText(
+        from,
+        `✅ *Solicitud recibida*\n\nYa pasé tu interés por *${tour?.title || "ese tour"}* al equipo.\n\nTe contactarán para confirmarte disponibilidad, precio y proceso de reserva.`
+      );
+
+      clearIntakeFlow(session);
       return res.sendStatus(200);
     }
 
@@ -3870,6 +4587,13 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
+    const collectionKey = detectTourCollectionFromUser(userText);
+    if (collectionKey) {
+      session.pendingServiceLine = "tours_rd";
+      await sendToursListByCollection(from, collectionKey);
+      return res.sendStatus(200);
+    }
+
     // =========================
     // TOUR ESPECÍFICO PRIMERO
     // =========================
@@ -3879,6 +4603,8 @@ app.post("/webhook", async (req, res) => {
       session.pendingTour = directDetectedTour;
       const tour = getTourByKey(directDetectedTour);
       updateLead(session, { tour_key: directDetectedTour });
+
+      await sendTourPresentation(from, tour);
 
       if (
         wantsQuote(tNorm) ||
@@ -3891,37 +4617,56 @@ app.post("/webhook", async (req, res) => {
         return res.sendStatus(200);
       }
 
+      if (isCatalogOnlyTour(tour)) {
+        session.state = "await_day";
+        await sendWhatsAppText(
+          from,
+          `Si deseas cotizar o reservar *${tour.title}*, dime la *fecha* o *temporada* que te interesa.`
+        );
+        return res.sendStatus(200);
+      }
+
       const range = parseDateRangeFromText(userText);
       if (!range) {
+        session.state = "await_day";
         await sendWhatsAppText(
           from,
-          `${buildTourInfoText(tour)}\n\nSi deseas reservar, dime la *fecha* o el *día* que te interesa.\nEj: "mañana", "viernes" o "14 de junio".`
+          `Si deseas reservar *${tour.title}*, dime la *fecha* o el *día* que te interesa.\nEj: "mañana", "viernes" o "14 de junio".`
         );
-        session.state = "await_day";
         return res.sendStatus(200);
       }
 
-      const slots = await getAvailableSlotsTool({
-        tour_key: directDetectedTour,
-        from: range.from,
-        to: range.to,
-      });
+      try {
+        const slots = await getAvailableSlotsTool({
+          tour_key: directDetectedTour,
+          from: range.from,
+          to: range.to,
+        });
 
-      if (!slots.length) {
+        if (!slots.length) {
+          await sendWhatsAppText(
+            from,
+            `No veo salidas disponibles para ese rango 🙏\nDime otro día o mes y te comparto más opciones.`
+          );
+          session.state = "await_day";
+          return res.sendStatus(200);
+        }
+
+        session.pendingRange = range;
+        session.lastSlots = slots;
+        session.state = "await_slot_choice";
+        const listText = formatSlotsList(directDetectedTour, slots, session);
+        await sendWhatsAppText(from, listText);
+        return res.sendStatus(200);
+      } catch (e) {
+        console.error("directDetectedTour availability error:", e?.response?.data || e?.message || e);
+        session.state = "await_day";
         await sendWhatsAppText(
           from,
-          `No veo salidas disponibles para ese rango 🙏\nDime otro día o mes y te comparto más opciones.`
+          `Ahora mismo no pude revisar la disponibilidad automática de *${tour.title}* 🙏\nPuedes enviarme la fecha y lo paso para validación manual.`
         );
-        session.state = "await_day";
         return res.sendStatus(200);
       }
-
-      session.pendingRange = range;
-      session.lastSlots = slots;
-      session.state = "await_slot_choice";
-      const listText = formatSlotsList(directDetectedTour, slots, session);
-      await sendWhatsAppText(from, listText);
-      return res.sendStatus(200);
     }
 
     // =========================
@@ -4036,31 +4781,48 @@ app.post("/webhook", async (req, res) => {
       (wantsQuote(tNorm) || wantsIncludes(tNorm) || wantsSchedule(tNorm) || wantsPayments(tNorm) || wantsPolicies(tNorm))
     ) {
       const tour = getTourByKey(session.pendingTour);
+      if (tour?.coverImageUrl) {
+        try {
+          await sendWhatsAppImage(from, tour.coverImageUrl, `🌴 ${tour.title}`, "BOT");
+        } catch {}
+      }
       await sendWhatsAppText(from, buildTourFaqReply(tour, tNorm));
       return res.sendStatus(200);
     }
 
-    if (session.pendingTour) {
-      const range = parseDateRangeFromText(userText);
-      if (range) {
-        const slots = await getAvailableSlotsTool({ tour_key: session.pendingTour, from: range.from, to: range.to });
-        if (!slots.length) {
-          await sendWhatsAppText(from, `No veo salidas disponibles para ese rango 🙏\nDime otro día o un mes y te comparto más opciones.`);
-          session.state = "await_day";
-          return res.sendStatus(200);
-        }
+    if (session.pendingTour && session.state === "idle") {
+      const tour = getTourByKey(session.pendingTour);
 
-        session.pendingRange = range;
-        session.lastSlots = slots;
-        session.state = "await_slot_choice";
-        const listText = formatSlotsList(session.pendingTour, slots, session);
-        await sendWhatsAppText(from, listText);
+      if (isCatalogOnlyTour(tour) && tNorm.length >= 2) {
+        session.state = "await_day";
+        session.pendingTravelDateText = userText;
+        await sendWhatsAppText(from, `Perfecto 👍\n¿Para cuántas *personas* sería *${tour?.title || "ese tour"}*?`);
+        session.state = "await_catalog_tour_people";
         return res.sendStatus(200);
       }
 
-      if (session.state === "await_day") {
-        await sendWhatsAppText(from, `Para elegir la fecha, puedes escribir: "mañana", "viernes", "próximo martes", "14 de junio" o "en julio".`);
-        return res.sendStatus(200);
+      const range = parseDateRangeFromText(userText);
+      if (range && isCalendarTour(tour)) {
+        try {
+          const slots = await getAvailableSlotsTool({ tour_key: session.pendingTour, from: range.from, to: range.to });
+          if (!slots.length) {
+            await sendWhatsAppText(from, `No veo salidas disponibles para ese rango 🙏\nDime otro día o un mes y te comparto más opciones.`);
+            session.state = "await_day";
+            return res.sendStatus(200);
+          }
+
+          session.pendingRange = range;
+          session.lastSlots = slots;
+          session.state = "await_slot_choice";
+          const listText = formatSlotsList(session.pendingTour, slots, session);
+          await sendWhatsAppText(from, listText);
+          return res.sendStatus(200);
+        } catch (e) {
+          console.error("pendingTour availability error:", e?.response?.data || e?.message || e);
+          session.state = "await_day";
+          await sendWhatsAppText(from, `No pude revisar la disponibilidad automática ahora mismo 🙏\nEnvíame la fecha y lo paso para revisión manual.`);
+          return res.sendStatus(200);
+        }
       }
     }
 
@@ -4083,6 +4845,16 @@ app.post("/webhook", async (req, res) => {
     return res.sendStatus(200);
   } catch (e) {
     console.error("Webhook error:", e?.response?.data || e?.message || e);
+
+    try {
+      if (from) {
+        await sendWhatsAppText(
+          from,
+          `Tuve un inconveniente momentáneo procesando tu mensaje 🙏\n\nEscríbeme *"menú"* para continuar o vuelve a intentar en unos segundos.`
+        );
+      }
+    } catch {}
+
     return res.sendStatus(200);
   } finally {
     try {
@@ -4122,8 +4894,8 @@ async function followupLeadsLoop() {
       if (!tour) continue;
 
       const msg =
-        `Hola 👋 Quedó pendiente tu reserva para *${tour.title}*.\n\n` +
-        `Si deseas, te comparto disponibilidad y cotización para la fecha que prefieras. Solo responde con el día o fecha que te interesa 😊`;
+        `Hola 👋 Quedó pendiente tu solicitud para *${tour.title}*.\n\n` +
+        `Si deseas, te ayudo a continuar con la fecha que te interesa 😊`;
 
       try {
         await sendWhatsAppText(id, msg, "BOT");
