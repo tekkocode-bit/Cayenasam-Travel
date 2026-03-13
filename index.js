@@ -14,39 +14,66 @@ const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const META_APP_SECRET = process.env.META_APP_SECRET;
 
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
 
 const GOOGLE_CALENDAR_ID = process.env.GOOGLE_CALENDAR_ID;
 const BUSINESS_NAME =
-  process.env.BUSINESS_NAME || process.env.AGENCY_NAME || process.env.CLINIC_NAME || "Cayenasam Travel";
+  process.env.BUSINESS_NAME ||
+  process.env.AGENCY_NAME ||
+  process.env.CLINIC_NAME ||
+  "Cayenasam Travel";
 const BUSINESS_ADDRESS =
-  process.env.BUSINESS_ADDRESS || process.env.CLINIC_ADDRESS || "Punta Cana, República Dominicana";
+  process.env.BUSINESS_ADDRESS ||
+  process.env.CLINIC_ADDRESS ||
+  "Punta Cana, República Dominicana";
 const BUSINESS_TIMEZONE =
-  process.env.BUSINESS_TIMEZONE || process.env.CLINIC_TIMEZONE || "America/Santo_Domingo";
+  process.env.BUSINESS_TIMEZONE ||
+  process.env.CLINIC_TIMEZONE ||
+  "America/Santo_Domingo";
 
 const MARKET_CONTACT_TEXT =
-  (process.env.MARKET_CONTACT_TEXT ||
-    "📍 Base operativa: Punta Cana, República Dominicana.\n📲 Escríbenos por este WhatsApp y un asesor te ayuda con tu reserva.")
-    .trim();
+  (
+    process.env.MARKET_CONTACT_TEXT ||
+    "📍 Base operativa: Punta Cana, República Dominicana.\n📲 Escríbenos por este WhatsApp y un asesor te ayuda con tu reserva."
+  ).trim();
 
 const SLOT_STEP_MIN = parseInt(process.env.SLOT_STEP_MIN || "15", 10);
-const MIN_BOOKING_LEAD_MIN = parseInt(process.env.MIN_BOOKING_LEAD_MIN || "120", 10);
-const MAX_SLOTS_RETURN = parseInt(process.env.MAX_SLOTS_RETURN || "80", 10);
-const DISPLAY_SLOTS_LIMIT = parseInt(process.env.DISPLAY_SLOTS_LIMIT || "12", 10);
+const MIN_BOOKING_LEAD_MIN = parseInt(
+  process.env.MIN_BOOKING_LEAD_MIN || "120",
+  10
+);
+const MAX_SLOTS_RETURN = parseInt(
+  process.env.MAX_SLOTS_RETURN || "80",
+  10
+);
+const DISPLAY_SLOTS_LIMIT = parseInt(
+  process.env.DISPLAY_SLOTS_LIMIT || "12",
+  10
+);
 
 const REMINDER_24H = (process.env.REMINDER_24H || "1") === "1";
 const REMINDER_2H = (process.env.REMINDER_2H || "1") === "1";
 const FOLLOWUP_ENABLED = (process.env.FOLLOWUP_ENABLED || "1") === "1";
-const FOLLOWUP_AFTER_MIN = parseInt(process.env.FOLLOWUP_AFTER_MIN || "180", 10);
-const FOLLOWUP_MAX_AGE_HOURS = parseInt(process.env.FOLLOWUP_MAX_AGE_HOURS || "72", 10);
+const FOLLOWUP_AFTER_MIN = parseInt(
+  process.env.FOLLOWUP_AFTER_MIN || "180",
+  10
+);
+const FOLLOWUP_MAX_AGE_HOURS = parseInt(
+  process.env.FOLLOWUP_MAX_AGE_HOURS || "72",
+  10
+);
 
 const PERSONAL_WA_TO = (process.env.PERSONAL_WA_TO || "").trim();
 const PRICE_CURRENCY = (process.env.PRICE_CURRENCY || "US$").trim();
 
 const CATALOG_DOCUMENT_URL = (process.env.CATALOG_DOCUMENT_URL || "").trim();
-const CATALOG_DOCUMENT_FILENAME = (process.env.CATALOG_DOCUMENT_FILENAME || "catalogo-servicios.pdf").trim();
-const CATALOG_DOCUMENT_CAPTION =
-  (process.env.CATALOG_DOCUMENT_CAPTION || "Aquí tienes el catálogo informativo 📄").trim();
+const CATALOG_DOCUMENT_FILENAME = (
+  process.env.CATALOG_DOCUMENT_FILENAME || "catalogo-servicios.pdf"
+).trim();
+const CATALOG_DOCUMENT_CAPTION = (
+  process.env.CATALOG_DOCUMENT_CAPTION ||
+  "Aquí tienes el catálogo informativo 📄"
+).trim();
 
 // =========================
 // BOTHUB
@@ -55,12 +82,24 @@ const BOTHUB_WEBHOOK_URL = (process.env.BOTHUB_WEBHOOK_URL || "").trim();
 const BOTHUB_WEBHOOK_SECRET = (process.env.BOTHUB_WEBHOOK_SECRET || "").trim();
 const BOTHUB_TIMEOUT_MS = Number(process.env.BOTHUB_TIMEOUT_MS || 6000);
 
-const BOT_PUBLIC_BASE_URL = (process.env.BOT_PUBLIC_BASE_URL || "").replace(/\/$/, "");
-const HUB_MEDIA_SECRET =
-  (process.env.HUB_MEDIA_SECRET || BOTHUB_WEBHOOK_SECRET || VERIFY_TOKEN || "").trim();
-const HUB_MEDIA_TTL_SEC = parseInt(process.env.HUB_MEDIA_TTL_SEC || "900", 10);
+const BOT_PUBLIC_BASE_URL = (process.env.BOT_PUBLIC_BASE_URL || "").replace(
+  /\/$/,
+  ""
+);
+const HUB_MEDIA_SECRET = (
+  process.env.HUB_MEDIA_SECRET ||
+  BOTHUB_WEBHOOK_SECRET ||
+  VERIFY_TOKEN ||
+  ""
+).trim();
+const HUB_MEDIA_TTL_SEC = parseInt(
+  process.env.HUB_MEDIA_TTL_SEC || "900",
+  10
+);
 const META_GRAPH_VERSION =
-  process.env.WHATSAPP_GRAPH_VERSION || process.env.META_GRAPH_VERSION || "v23.0";
+  process.env.WHATSAPP_GRAPH_VERSION ||
+  process.env.META_GRAPH_VERSION ||
+  "v23.0";
 
 // =========================
 // HELPERS CONFIG
@@ -73,36 +112,92 @@ function safeJson(str, fallback) {
   }
 }
 
-function uniqueStrings(arr) {
-  return Array.from(new Set((arr || []).filter(Boolean).map((v) => String(v).trim()).filter(Boolean)));
+function normalizeText(t) {
+  return String(t || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
-function chunkArray(arr, size) {
-  const out = [];
-  const input = Array.isArray(arr) ? arr : [];
-  const n = Math.max(1, Number(size || 1));
-  for (let i = 0; i < input.length; i += n) {
-    out.push(input.slice(i, i + n));
-  }
-  return out;
+function clipText(text, max) {
+  const s = String(text || "").replace(/\s+/g, " ").trim();
+  if (!s) return "";
+  return s.length <= max ? s : s.slice(0, max).trim();
+}
+
+function waRowTitle(title, max = 24) {
+  return clipText(title, max);
+}
+
+function normalizePhoneDigits(raw) {
+  return String(raw || "").replace(/[^\d]/g, "");
+}
+
+function toE164DigitsRD(phoneDigits) {
+  const d = normalizePhoneDigits(phoneDigits);
+  if (d.length === 10) return "1" + d;
+  if (d.length === 11 && d.startsWith("1")) return d;
+  return d;
+}
+
+function buildPhoneVariants(raw) {
+  const d = normalizePhoneDigits(raw);
+  if (!d) return [];
+
+  const set = new Set([d]);
+  const e164 = toE164DigitsRD(d);
+  if (e164) set.add(e164);
+
+  if (d.length === 11 && d.startsWith("1")) set.add(d.slice(1));
+  if (d.length === 10) set.add("1" + d);
+
+  return Array.from(set).filter(Boolean);
 }
 
 // =========================
 // MENÚ PRINCIPAL
 // =========================
 const SERVICE_LINES = [
-  { key: "tours_rd", id: "svc_tours_rd", title: "Tours en República Dominicana" },
-  { key: "boletos_aereos", id: "svc_boletos_aereos", title: "Boletos aéreos" },
+  {
+    key: "tours_rd",
+    id: "svc_tours_rd",
+    title: "Tours en República Dominicana",
+  },
+  {
+    key: "boletos_aereos",
+    id: "svc_boletos_aereos",
+    title: "Boletos aéreos",
+  },
   { key: "solo_hoteles", id: "svc_solo_hoteles", title: "Solo hoteles" },
-  { key: "seguros_viaje", id: "svc_seguros_viaje", title: "Seguros de viaje" },
+  {
+    key: "seguros_viaje",
+    id: "svc_seguros_viaje",
+    title: "Seguros de viaje",
+  },
   { key: "traslados", id: "svc_traslados", title: "Traslados" },
-  { key: "paquetes_vacacionales", id: "svc_paquetes_vacacionales", title: "Paquetes vacacionales" },
-  { key: "hablar_asesor", id: "svc_hablar_asesor", title: "Hablar con un asesor" },
-  { key: "ubicacion_contacto", id: "svc_ubicacion_contacto", title: "Ubicación y contacto" },
+  {
+    key: "paquetes_vacacionales",
+    id: "svc_paquetes_vacacionales",
+    title: "Paquetes vacacionales",
+  },
+  {
+    key: "hablar_asesor",
+    id: "svc_hablar_asesor",
+    title: "Hablar con un asesor",
+  },
+  {
+    key: "ubicacion_contacto",
+    id: "svc_ubicacion_contacto",
+    title: "Ubicación y contacto",
+  },
   { key: "catalogo_pdf", id: "svc_catalogo_pdf", title: "Catálogo PDF" },
 ];
 
-const SERVICE_LINE_ID_TO_KEY = Object.fromEntries(SERVICE_LINES.map((s) => [s.id, s.key]));
+const SERVICE_LINE_ID_TO_KEY = Object.fromEntries(
+  SERVICE_LINES.map((s) => [s.id, s.key])
+);
 
 const TOUR_ORIGINS = [
   { key: "santo_domingo", id: "org_santo_domingo", title: "Santo Domingo" },
@@ -110,7 +205,9 @@ const TOUR_ORIGINS = [
   { key: "las_terrenas", id: "org_las_terrenas", title: "Las Terrenas" },
 ];
 
-const TOUR_ORIGIN_ID_TO_KEY = Object.fromEntries(TOUR_ORIGINS.map((o) => [o.id, o.key]));
+const TOUR_ORIGIN_ID_TO_KEY = Object.fromEntries(
+  TOUR_ORIGINS.map((o) => [o.id, o.key])
+);
 
 const PACKAGE_DESTINATIONS = [
   { key: "peru", id: "pkg_peru", title: "Perú" },
@@ -120,34 +217,36 @@ const PACKAGE_DESTINATIONS = [
   { key: "otro_destino", id: "pkg_otro_destino", title: "Otro destino" },
 ];
 
-const PACKAGE_DESTINATION_ID_TO_KEY = Object.fromEntries(PACKAGE_DESTINATIONS.map((p) => [p.id, p.key]));
-
-const TOUR_COLLECTIONS = [
-  { key: "marzo", id: "col_marzo", title: "Tours de Marzo" },
-  { key: "semana_santa", id: "col_semana_santa", title: "Tours Semana Santa" },
-];
-
-const TOUR_COLLECTION_ID_TO_KEY = Object.fromEntries(TOUR_COLLECTIONS.map((c) => [c.id, c.key]));
+const PACKAGE_DESTINATION_ID_TO_KEY = Object.fromEntries(
+  PACKAGE_DESTINATIONS.map((p) => [p.id, p.key])
+);
 
 // =========================
 // REDIS
 // =========================
 const REDIS_URL_RAW = (process.env.REDIS_URL || "").trim();
-const SESSION_TTL_SEC = parseInt(process.env.SESSION_TTL_SEC || String(60 * 60 * 24 * 14), 10);
+const SESSION_TTL_SEC = parseInt(
+  process.env.SESSION_TTL_SEC || String(60 * 60 * 24 * 14),
+  10
+);
 const SESSION_PREFIX =
   process.env.SESSION_PREFIX || "tekko:travel:rd:sess:";
 
 function normalizeRedisUrl(url) {
   const u = String(url || "").trim();
   if (!u) return "";
-  if (u.startsWith("redis://")) return "rediss://" + u.slice("redis://".length);
+  if (u.startsWith("redis://")) {
+    return "rediss://" + u.slice("redis://".length);
+  }
   return u;
 }
 
 const redisUrl = normalizeRedisUrl(REDIS_URL_RAW);
 const redis = redisUrl
   ? new Redis(redisUrl, {
-      tls: redisUrl.startsWith("rediss://") ? { rejectUnauthorized: false } : undefined,
+      tls: redisUrl.startsWith("rediss://")
+        ? { rejectUnauthorized: false }
+        : undefined,
       maxRetriesPerRequest: 2,
       enableReadyCheck: true,
     })
@@ -198,6 +297,10 @@ function defaultSession() {
     pendingTransferRoute: null,
     pendingAdvisorTopic: null,
 
+    pendingVisualCollection: null,
+    pendingVisualTour: null,
+    lastVisualOptions: [],
+
     lastBooking: null,
     greeted: false,
     lastMsgId: null,
@@ -228,30 +331,49 @@ function sanitizeSession(session) {
   session.lastSlots = session.lastSlots.slice(0, MAX_SLOTS_RETURN);
 
   if (!Array.isArray(session.lastDisplaySlots)) session.lastDisplaySlots = [];
-  session.lastDisplaySlots = session.lastDisplaySlots.slice(0, DISPLAY_SLOTS_LIMIT);
+  session.lastDisplaySlots = session.lastDisplaySlots.slice(
+    0,
+    DISPLAY_SLOTS_LIMIT
+  );
+
+  if (!Array.isArray(session.lastVisualOptions)) session.lastVisualOptions = [];
+  session.lastVisualOptions = session.lastVisualOptions.slice(0, 50);
 
   if (!session.lead || typeof session.lead !== "object") {
     session.lead = defaultLead();
   } else {
     if (typeof session.lead.tour_key !== "string") session.lead.tour_key = "";
-    if (typeof session.lead.followupSent !== "boolean") session.lead.followupSent = false;
-    if (typeof session.lead.lastInteractionAt !== "string") session.lead.lastInteractionAt = "";
-    if (typeof session.lead.quotePreview !== "string") session.lead.quotePreview = "";
-    if (typeof session.lead.converted !== "boolean") session.lead.converted = false;
+    if (typeof session.lead.followupSent !== "boolean")
+      session.lead.followupSent = false;
+    if (typeof session.lead.lastInteractionAt !== "string")
+      session.lead.lastInteractionAt = "";
+    if (typeof session.lead.quotePreview !== "string")
+      session.lead.quotePreview = "";
+    if (typeof session.lead.converted !== "boolean")
+      session.lead.converted = false;
   }
 
   if (!session.reschedule || typeof session.reschedule !== "object") {
     session.reschedule = defaultSession().reschedule;
   } else {
-    if (typeof session.reschedule.active !== "boolean") session.reschedule.active = false;
-    if (typeof session.reschedule.reservation_id !== "string") session.reschedule.reservation_id = "";
-    if (typeof session.reschedule.phone !== "string") session.reschedule.phone = "";
-    if (typeof session.reschedule.passenger_name !== "string") session.reschedule.passenger_name = "";
-    if (typeof session.reschedule.tour_key !== "string") session.reschedule.tour_key = "";
-    if (typeof session.reschedule.adults !== "number") session.reschedule.adults = 0;
-    if (typeof session.reschedule.children !== "number") session.reschedule.children = 0;
-    if (typeof session.reschedule.pickup !== "string") session.reschedule.pickup = "";
-    if (typeof session.reschedule.city !== "string") session.reschedule.city = "";
+    if (typeof session.reschedule.active !== "boolean")
+      session.reschedule.active = false;
+    if (typeof session.reschedule.reservation_id !== "string")
+      session.reschedule.reservation_id = "";
+    if (typeof session.reschedule.phone !== "string")
+      session.reschedule.phone = "";
+    if (typeof session.reschedule.passenger_name !== "string")
+      session.reschedule.passenger_name = "";
+    if (typeof session.reschedule.tour_key !== "string")
+      session.reschedule.tour_key = "";
+    if (typeof session.reschedule.adults !== "number")
+      session.reschedule.adults = 0;
+    if (typeof session.reschedule.children !== "number")
+      session.reschedule.children = 0;
+    if (typeof session.reschedule.pickup !== "string")
+      session.reschedule.pickup = "";
+    if (typeof session.reschedule.city !== "string")
+      session.reschedule.city = "";
   }
 
   if (typeof session.state !== "string") session.state = "idle";
@@ -274,10 +396,14 @@ function sanitizeSession(session) {
     "pendingHotelStars",
     "pendingTransferRoute",
     "pendingAdvisorTopic",
+    "pendingVisualCollection",
+    "pendingVisualTour",
   ];
 
   for (const k of maybeStringOrNull) {
-    if (typeof session[k] !== "string" && session[k] !== null) session[k] = null;
+    if (typeof session[k] !== "string" && session[k] !== null) {
+      session[k] = null;
+    }
   }
 
   const maybeNumberOrNull = [
@@ -289,10 +415,17 @@ function sanitizeSession(session) {
   ];
 
   for (const k of maybeNumberOrNull) {
-    if (typeof session[k] !== "number" && session[k] !== null) session[k] = null;
+    if (typeof session[k] !== "number" && session[k] !== null) {
+      session[k] = null;
+    }
   }
 
-  if (typeof session.pendingRange !== "object" && session.pendingRange !== null) session.pendingRange = null;
+  if (
+    typeof session.pendingRange !== "object" &&
+    session.pendingRange !== null
+  ) {
+    session.pendingRange = null;
+  }
 
   return session;
 }
@@ -332,7 +465,13 @@ async function listAllSessionIds() {
   let cursor = "0";
 
   do {
-    const out = await redis.scan(cursor, "MATCH", `${SESSION_PREFIX}*`, "COUNT", 200);
+    const out = await redis.scan(
+      cursor,
+      "MATCH",
+      `${SESSION_PREFIX}*`,
+      "COUNT",
+      200
+    );
     cursor = out[0];
     const keys = out[1] || [];
     for (const k of keys) {
@@ -373,6 +512,10 @@ function clearIntakeFlow(session) {
   session.pendingNights = null;
   session.pendingTransferRoute = null;
   session.pendingAdvisorTopic = null;
+
+  session.pendingVisualCollection = null;
+  session.pendingVisualTour = null;
+  session.lastVisualOptions = [];
 }
 
 // =====================================================
@@ -382,7 +525,9 @@ function stableStringify(obj) {
   if (obj === null || typeof obj !== "object") return JSON.stringify(obj);
   if (Array.isArray(obj)) return `[${obj.map(stableStringify).join(",")}]`;
   const keys = Object.keys(obj).sort();
-  return `{${keys.map((k) => JSON.stringify(k) + ":" + stableStringify(obj[k])).join(",")}}`;
+  return `{${keys
+    .map((k) => JSON.stringify(k) + ":" + stableStringify(obj[k]))
+    .join(",")}}`;
 }
 
 function removeUndefinedDeep(value) {
@@ -403,7 +548,10 @@ function bothubHmacStable(payload, secret) {
 }
 
 function bothubHmacJson(payload, secret) {
-  return crypto.createHmac("sha256", secret).update(JSON.stringify(payload)).digest("hex");
+  return crypto
+    .createHmac("sha256", secret)
+    .update(JSON.stringify(payload))
+    .digest("hex");
 }
 
 function getHubSignature(req) {
@@ -446,7 +594,10 @@ async function bothubReportMessage(payload) {
   try {
     const cleanPayload = removeUndefinedDeep(payload);
     const raw = stableStringify(cleanPayload);
-    const sig = crypto.createHmac("sha256", BOTHUB_WEBHOOK_SECRET).update(raw).digest("hex");
+    const sig = crypto
+      .createHmac("sha256", BOTHUB_WEBHOOK_SECRET)
+      .update(raw)
+      .digest("hex");
 
     await axios.post(BOTHUB_WEBHOOK_URL, raw, {
       headers: {
@@ -457,7 +608,10 @@ async function bothubReportMessage(payload) {
       transformRequest: [(data) => data],
     });
   } catch (e) {
-    console.error("Bothub report failed:", e?.response?.data || e?.message || e);
+    console.error(
+      "Bothub report failed:",
+      e?.response?.data || e?.message || e
+    );
   }
 }
 
@@ -511,19 +665,31 @@ function extractInboundMeta(msg) {
   }
 
   if (msg?.type === "sticker") {
-    return { kind: "STICKER", mediaId: msg?.sticker?.id, mimeType: msg?.sticker?.mime_type };
+    return {
+      kind: "STICKER",
+      mediaId: msg?.sticker?.id,
+      mimeType: msg?.sticker?.mime_type,
+    };
   }
 
-  if (msg?.type === "contacts") return { kind: "CONTACTS", count: msg?.contacts?.length || 0 };
+  if (msg?.type === "contacts") {
+    return { kind: "CONTACTS", count: msg?.contacts?.length || 0 };
+  }
 
   if (msg?.type === "reaction") {
-    return { kind: "REACTION", emoji: msg?.reaction?.emoji, messageId: msg?.reaction?.message_id };
+    return {
+      kind: "REACTION",
+      emoji: msg?.reaction?.emoji,
+      messageId: msg?.reaction?.message_id,
+    };
   }
 
   if (msg?.type === "order") {
     return {
       kind: "ORDER",
-      itemCount: Array.isArray(msg?.order?.product_items) ? msg.order.product_items.length : 0,
+      itemCount: Array.isArray(msg?.order?.product_items)
+        ? msg.order.product_items.length
+        : 0,
     };
   }
 
@@ -554,7 +720,9 @@ function sanitizeFileName(name, fallback = "file") {
 }
 
 function getRequestBaseUrl(req) {
-  const proto = String(req.headers["x-forwarded-proto"] || req.protocol || "https")
+  const proto = String(
+    req.headers["x-forwarded-proto"] || req.protocol || "https"
+  )
     .split(",")[0]
     .trim();
   const host = String(req.headers["x-forwarded-host"] || req.get("host") || "")
@@ -571,7 +739,10 @@ function getBotPublicBaseUrl(req) {
 
 function signHubMediaToken(mediaId, ts) {
   if (!HUB_MEDIA_SECRET) return "";
-  return crypto.createHmac("sha256", HUB_MEDIA_SECRET).update(`${String(mediaId)}:${String(ts)}`).digest("hex");
+  return crypto
+    .createHmac("sha256", HUB_MEDIA_SECRET)
+    .update(`${String(mediaId)}:${String(ts)}`)
+    .digest("hex");
 }
 
 function verifyHubMediaToken(mediaId, ts, sig) {
@@ -596,14 +767,19 @@ function buildHubMediaUrl(req, mediaId) {
   const ts = String(Date.now());
   const sig = signHubMediaToken(mediaId, ts);
 
-  return `${base.replace(/\/$/, "")}/hub_media/${encodeURIComponent(mediaId)}?ts=${encodeURIComponent(ts)}&sig=${encodeURIComponent(sig)}`;
+  return `${base.replace(/\/$/, "")}/hub_media/${encodeURIComponent(
+    mediaId
+  )}?ts=${encodeURIComponent(ts)}&sig=${encodeURIComponent(sig)}`;
 }
 
 function attachHubMediaUrl(req, meta) {
   const out = { ...(meta || {}) };
   const kind = String(out?.kind || "").toUpperCase();
 
-  if (out?.mediaId && ["AUDIO", "IMAGE", "VIDEO", "DOCUMENT", "STICKER"].includes(kind)) {
+  if (
+    out?.mediaId &&
+    ["AUDIO", "IMAGE", "VIDEO", "DOCUMENT", "STICKER"].includes(kind)
+  ) {
     const mediaUrl = buildHubMediaUrl(req, out.mediaId);
     if (mediaUrl) out.mediaUrl = mediaUrl;
   }
@@ -614,7 +790,9 @@ function attachHubMediaUrl(req, meta) {
 async function getMetaMediaInfo(mediaId) {
   if (!WA_TOKEN) throw new Error("WA_TOKEN not configured");
   const res = await axios.get(
-    `https://graph.facebook.com/${META_GRAPH_VERSION}/${encodeURIComponent(mediaId)}`,
+    `https://graph.facebook.com/${META_GRAPH_VERSION}/${encodeURIComponent(
+      mediaId
+    )}`,
     {
       headers: { Authorization: `Bearer ${WA_TOKEN}` },
       timeout: 30000,
@@ -648,7 +826,11 @@ async function downloadMetaMedia(mediaId) {
   });
 
   if (bin.status < 200 || bin.status >= 300) {
-    throw new Error(typeof bin.data === "string" ? bin.data : `Meta media download failed (${bin.status})`);
+    throw new Error(
+      typeof bin.data === "string"
+        ? bin.data
+        : `Meta media download failed (${bin.status})`
+    );
   }
 
   return {
@@ -667,17 +849,27 @@ app.use(
 );
 
 // =========================
-// TOURS RD
+// TOURS RD ESTRUCTURADOS
 // =========================
 const TOUR_CATEGORIES = [
   { key: "tours_diarios", id: "cat_tours_diarios", title: "Tours diarios" },
   { key: "playas", id: "cat_playas", title: "Playas" },
   { key: "montanas", id: "cat_montanas", title: "Montañas" },
-  { key: "excursiones_especiales", id: "cat_excursiones_especiales", title: "Excursiones especiales" },
-  { key: "paquetes_temporada", id: "cat_paquetes_temporada", title: "Paquetes de temporada" },
+  {
+    key: "excursiones_especiales",
+    id: "cat_excursiones_especiales",
+    title: "Excursiones especiales",
+  },
+  {
+    key: "paquetes_temporada",
+    id: "cat_paquetes_temporada",
+    title: "Paquetes de temporada",
+  },
 ];
 
-const CATEGORY_ID_TO_KEY = Object.fromEntries(TOUR_CATEGORIES.map((c) => [c.id, c.key]));
+const CATEGORY_ID_TO_KEY = Object.fromEntries(
+  TOUR_CATEGORIES.map((c) => [c.id, c.key])
+);
 
 function defaultTourCatalog() {
   return [
@@ -685,10 +877,10 @@ function defaultTourCatalog() {
       key: "city_tour_santo_domingo",
       id: "tour_city_tour_santo_domingo",
       title: "City Tour Santo Domingo",
-      bookingMode: "calendar",
       category: "tours_diarios",
       origins: ["santo_domingo"],
-      description: "Recorrido guiado por la Zona Colonial y puntos icónicos de Santo Domingo.",
+      description:
+        "Recorrido guiado por la Zona Colonial y puntos icónicos de Santo Domingo.",
       durationMin: 240,
       durationLabel: "4 horas",
       basePriceAdult: 35,
@@ -700,7 +892,6 @@ function defaultTourCatalog() {
       reservationPolicy: "Reserva con al menos 24 horas de anticipación.",
       paymentPolicy: "Separa con avance para confirmar tu cupo.",
       includes: ["Transporte interno", "Guía", "Paradas fotográficas"],
-      aliases: ["city tour", "zona colonial"],
       schedule: {
         mon: ["09:00", "15:00"],
         tue: ["09:00", "15:00"],
@@ -715,11 +906,10 @@ function defaultTourCatalog() {
       key: "isla_saona",
       id: "tour_isla_saona",
       title: "Isla Saona",
-      bookingMode: "calendar",
       category: "playas",
       origins: ["santo_domingo", "punta_cana"],
-      collections: ["marzo", "semana_santa"],
-      description: "Excursión de día completo con playa, lancha/catamarán y ambiente caribeño.",
+      description:
+        "Excursión de día completo con playa, lancha/catamarán y ambiente caribeño.",
       durationMin: 720,
       durationLabel: "Día completo",
       basePriceAdult: 95,
@@ -731,13 +921,6 @@ function defaultTourCatalog() {
       reservationPolicy: "Reserva con 48 horas de anticipación.",
       paymentPolicy: "Requiere avance para bloquear espacios.",
       includes: ["Transporte", "Guía", "Almuerzo", "Bebidas"],
-      aliases: ["saona"],
-      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428133/Isla_Saona_mcvfid.jpg",
-      mediaUrls: [
-        "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428133/Isla_Saona_mcvfid.jpg",
-        "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427801/Isla_Saona_sndbbm.jpg",
-        "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427802/Isla_Saona2_z0kre2.jpg",
-      ],
       schedule: {
         mon: ["06:00"],
         tue: ["06:00"],
@@ -752,11 +935,10 @@ function defaultTourCatalog() {
       key: "isla_catalina",
       id: "tour_isla_catalina",
       title: "Isla Catalina",
-      bookingMode: "calendar",
       category: "playas",
       origins: ["santo_domingo", "punta_cana"],
-      collections: ["punta_cana", "semana_santa"],
-      description: "Tour ideal para disfrutar de playa, snorkeling y día relajado.",
+      description:
+        "Tour ideal para disfrutar de playa, snorkeling y día relajado.",
       durationMin: 660,
       durationLabel: "Día completo",
       basePriceAdult: 89,
@@ -768,12 +950,6 @@ function defaultTourCatalog() {
       reservationPolicy: "Reserva con 48 horas de anticipación.",
       paymentPolicy: "Avance obligatorio para confirmar.",
       includes: ["Transporte", "Guía", "Snorkeling", "Almuerzo"],
-      aliases: ["catalina"],
-      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427501/Isla_Catalina_kavssn.jpg",
-      mediaUrls: [
-        "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427501/Isla_Catalina_kavssn.jpg",
-        "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427800/Isla_Catalina_hxfyjm.jpg",
-      ],
       schedule: {
         mon: ["06:30"],
         wed: ["06:30"],
@@ -785,10 +961,10 @@ function defaultTourCatalog() {
       key: "jarabacoa_aventura",
       id: "tour_jarabacoa_aventura",
       title: "Jarabacoa Aventura",
-      bookingMode: "calendar",
       category: "montanas",
       origins: ["santo_domingo"],
-      description: "Ruta de montaña con paisajes, río y paradas fotográficas.",
+      description:
+        "Ruta de montaña con paisajes, río y paradas fotográficas.",
       durationMin: 720,
       durationLabel: "Día completo",
       basePriceAdult: 70,
@@ -800,7 +976,6 @@ function defaultTourCatalog() {
       reservationPolicy: "Reserva con 48 horas de anticipación.",
       paymentPolicy: "Separa con avance.",
       includes: ["Transporte", "Guía", "Paradas", "Hidratación"],
-      aliases: ["jarabacoa"],
       schedule: {
         sat: ["06:00"],
         sun: ["06:00"],
@@ -810,10 +985,8 @@ function defaultTourCatalog() {
       key: "buggies_macao",
       id: "tour_buggies_macao",
       title: "Buggies Macao",
-      bookingMode: "calendar",
       category: "excursiones_especiales",
       origins: ["punta_cana"],
-      collections: ["punta_cana", "marzo"],
       description: "Aventura en buggies con playa y recorrido guiado.",
       durationMin: 300,
       durationLabel: "5 horas",
@@ -826,12 +999,6 @@ function defaultTourCatalog() {
       reservationPolicy: "Reserva con 24 horas de anticipación.",
       paymentPolicy: "Avance para confirmar.",
       includes: ["Transporte", "Guía", "Equipo básico"],
-      aliases: ["buggies", "macao"],
-      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427499/Buggies_d3s2th.jpg",
-      mediaUrls: [
-        "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427499/Buggies_d3s2th.jpg",
-        "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428130/Buggies_punta_cana_wcqwdl.jpg",
-      ],
       schedule: {
         mon: ["08:00", "13:00"],
         tue: ["08:00", "13:00"],
@@ -845,22 +1012,22 @@ function defaultTourCatalog() {
       key: "samana_temporada",
       id: "tour_samana_temporada",
       title: "Samaná Temporada",
-      bookingMode: "calendar",
       category: "paquetes_temporada",
       origins: ["santo_domingo", "las_terrenas"],
-      description: "Paquete especial de temporada con transporte y experiencia guiada.",
+      description:
+        "Paquete especial de temporada con transporte y experiencia guiada.",
       durationMin: 900,
       durationLabel: "Día completo",
       basePriceAdult: 120,
       basePriceChild: 95,
       capacity: 22,
       meetingPoint: "Punto coordinado según ciudad",
-      pickupOptions: "Santo Domingo, San Pedro, La Romana y Las Terrenas",
+      pickupOptions:
+        "Santo Domingo, San Pedro, La Romana y Las Terrenas",
       paymentMethods: "Transferencia, efectivo y pago por link",
       reservationPolicy: "Sujeto a temporada y cupos disponibles.",
       paymentPolicy: "Avance obligatorio para confirmar cupo.",
       includes: ["Transporte", "Guía", "Almuerzo", "Actividad principal"],
-      aliases: ["samana", "samaná"],
       activeMonths: [1, 2, 3],
       schedule: {
         fri: ["05:30"],
@@ -871,406 +1038,326 @@ function defaultTourCatalog() {
   ];
 }
 
-function defaultVisualTourCatalog() {
-  return [
-    // =========================
-    // Tours desde Punta Cana
-    // =========================
-    {
-      key: "pc_scoobadoo",
-      id: "tour_pc_scoobadoo",
-      title: "Scoobadoo",
-      bookingMode: "catalog_only",
-      origins: ["punta_cana"],
-      collections: ["punta_cana"],
-      description: "Tour visual desde Punta Cana. Te muestro el flyer actualizado con los detalles.",
-      aliases: ["scoobadoo", "scubadoo"],
-      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427504/Scoobadoo_vjqbif.jpg",
-      mediaUrls: ["https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427504/Scoobadoo_vjqbif.jpg"],
-    },
-    {
-      key: "pc_polaris",
-      id: "tour_pc_polaris",
-      title: "Polaris",
-      bookingMode: "catalog_only",
-      origins: ["punta_cana"],
-      collections: ["punta_cana"],
-      description: "Tour visual desde Punta Cana. Te muestro el flyer actualizado con los detalles.",
-      aliases: ["polaris punta cana", "polaris"],
-      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427504/Polaris_hgbvqi.jpg",
-      mediaUrls: ["https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427504/Polaris_hgbvqi.jpg"],
-    },
-    {
-      key: "pc_maroca",
-      id: "tour_pc_maroca",
-      title: "Maroca",
-      bookingMode: "catalog_only",
-      origins: ["punta_cana"],
-      collections: ["punta_cana"],
-      description: "Tour visual desde Punta Cana. Te muestro el flyer actualizado con los detalles.",
-      aliases: ["maroca"],
-      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427503/Maroca_hzzyps.jpg",
-      mediaUrls: ["https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427503/Maroca_hzzyps.jpg"],
-    },
-    {
-      key: "pc_jet_ski",
-      id: "tour_pc_jet_ski",
-      title: "Jet Ski",
-      bookingMode: "catalog_only",
-      origins: ["punta_cana"],
-      collections: ["punta_cana"],
-      description: "Tour visual desde Punta Cana. Te muestro el flyer actualizado con los detalles.",
-      aliases: ["jet ski", "jetski"],
-      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427503/Jet-ski_kfxska.jpg",
-      mediaUrls: ["https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427503/Jet-ski_kfxska.jpg"],
-    },
-    {
-      key: "pc_jet_cars",
-      id: "tour_pc_jet_cars",
-      title: "Jet Cars",
-      bookingMode: "catalog_only",
-      origins: ["punta_cana"],
-      collections: ["punta_cana"],
-      description: "Tour visual desde Punta Cana. Te muestro el flyer actualizado con los detalles.",
-      aliases: ["jet cars", "jet car"],
-      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427502/Jet-cars_pu2p3w.jpg",
-      mediaUrls: ["https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427502/Jet-cars_pu2p3w.jpg"],
-    },
-    {
-      key: "pc_horseback_riding",
-      id: "tour_pc_horseback_riding",
-      title: "Horseback Riding",
-      bookingMode: "catalog_only",
-      origins: ["punta_cana"],
-      collections: ["punta_cana"],
-      description: "Tour visual desde Punta Cana. Te muestro el flyer actualizado con los detalles.",
-      aliases: ["horseback riding", "caballos", "montar caballo", "paseo a caballo"],
-      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427501/Horseback_Riding_fwojde.jpg",
-      mediaUrls: ["https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427501/Horseback_Riding_fwojde.jpg"],
-    },
-    {
-      key: "pc_fourwheel",
-      id: "tour_pc_fourwheel",
-      title: "Fourwheel",
-      bookingMode: "catalog_only",
-      origins: ["punta_cana"],
-      collections: ["punta_cana", "marzo"],
-      description: "Tour visual desde Punta Cana. Te muestro el flyer actualizado con los detalles.",
-      aliases: ["fourwheel", "four wheel", "cuatrimoto"],
-      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427500/Fourwheel_cixu6i.jpg",
-      mediaUrls: [
-        "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427500/Fourwheel_cixu6i.jpg",
-        "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428133/Fourwheel_punta_cana_v8lw1l.jpg",
-      ],
-    },
-    {
-      key: "pc_dorado_park",
-      id: "tour_pc_dorado_park",
-      title: "Dorado Park",
-      bookingMode: "catalog_only",
-      origins: ["punta_cana"],
-      collections: ["punta_cana"],
-      description: "Tour visual desde Punta Cana. Te muestro el flyer actualizado con los detalles.",
-      aliases: ["dorado park"],
-      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427500/Dorado_Park_p8unjz.jpg",
-      mediaUrls: ["https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427500/Dorado_Park_p8unjz.jpg"],
-    },
-    {
-      key: "pc_dolphin_ocean_adventure",
-      id: "tour_pc_dolphin_ocean_adventure",
-      title: "Dolphin Ocean Adventure",
-      bookingMode: "catalog_only",
-      origins: ["punta_cana"],
-      collections: ["punta_cana"],
-      description: "Tour visual desde Punta Cana. Te muestro el flyer actualizado con los detalles.",
-      aliases: ["dolphin ocean adventure", "dolphin", "delfines"],
-      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427500/Dolphin_ocean_aventure_tzzspl.jpg",
-      mediaUrls: ["https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427500/Dolphin_ocean_aventure_tzzspl.jpg"],
-    },
-    {
-      key: "pc_coco_bongo",
-      id: "tour_pc_coco_bongo",
-      title: "Coco Bongo",
-      bookingMode: "catalog_only",
-      origins: ["punta_cana"],
-      collections: ["punta_cana"],
-      description: "Tour visual desde Punta Cana. Te muestro el flyer actualizado con los detalles.",
-      aliases: ["coco bongo"],
-      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427500/Coco_Bongo_dknp2w.jpg",
-      mediaUrls: ["https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427500/Coco_Bongo_dknp2w.jpg"],
-    },
-    {
-      key: "pc_cayo_new",
-      id: "tour_pc_cayo_new",
-      title: "Cayo New",
-      bookingMode: "catalog_only",
-      origins: ["punta_cana"],
-      collections: ["punta_cana"],
-      description: "Tour visual desde Punta Cana. Te muestro el flyer actualizado con los detalles.",
-      aliases: ["cayo new"],
-      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427500/Cayo_New_m0ke20.jpg",
-      mediaUrls: ["https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427500/Cayo_New_m0ke20.jpg"],
-    },
-    {
-      key: "pc_aqua_kart_polaris",
-      id: "tour_pc_aqua_kart_polaris",
-      title: "Aqua Kart + Polaris",
-      bookingMode: "catalog_only",
-      origins: ["punta_cana"],
-      collections: ["punta_cana"],
-      description: "Tour visual desde Punta Cana. Te muestro el flyer actualizado con los detalles.",
-      aliases: ["aqua kart polaris", "jet ski aqua kart polaris", "aqua kart + polaris"],
-      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427499/3-_Jet-sky_Aqua-kart_Polaris_lm2sht.jpg",
-      mediaUrls: ["https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427499/3-_Jet-sky_Aqua-kart_Polaris_lm2sht.jpg"],
-    },
-    {
-      key: "pc_aqua_kart",
-      id: "tour_pc_aqua_kart",
-      title: "Aqua Kart",
-      bookingMode: "catalog_only",
-      origins: ["punta_cana"],
-      collections: ["punta_cana", "semana_santa"],
-      description: "Tour visual desde Punta Cana. Te muestro el flyer actualizado con los detalles.",
-      aliases: ["aqua kart", "jet ski aqua kart"],
-      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427499/2_-Jet-skit_Aqua-kart_cxpyzj.jpg",
-      mediaUrls: [
-        "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427499/2_-Jet-skit_Aqua-kart_cxpyzj.jpg",
-        "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427801/Aqua-kart_krqxuj.jpg",
-      ],
-    },
-    {
-      key: "pc_boat_party",
-      id: "tour_pc_boat_party",
-      title: "Boat Party",
-      bookingMode: "catalog_only",
-      origins: ["punta_cana"],
-      collections: ["punta_cana"],
-      description: "Tour visual desde Punta Cana. Te muestro el flyer actualizado con los detalles.",
-      aliases: ["boat party", "party boat"],
-      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427499/Boat_Party_g3iycw.jpg",
-      mediaUrls: ["https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427499/Boat_Party_g3iycw.jpg"],
-    },
-
-    // =========================
-    // Tours de Marzo
-    // =========================
-    {
-      key: "marzo_santa_fe_full_day",
-      id: "tour_marzo_santa_fe_full_day",
-      title: "Santa Fe Full Day",
-      bookingMode: "catalog_only",
-      collections: ["marzo"],
-      description: "Tour especial del catálogo de marzo. Te muestro el flyer actualizado con los detalles.",
-      aliases: ["santa fe full day", "santa fe"],
-      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428140/Santa_Fe_full_day_k2twpq.jpg",
-      mediaUrls: ["https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428140/Santa_Fe_full_day_k2twpq.jpg"],
-    },
-    {
-      key: "marzo_rio_y_playas_san_juan",
-      id: "tour_marzo_rio_y_playas_san_juan",
-      title: "Río y Playas San Juan",
-      bookingMode: "catalog_only",
-      collections: ["marzo"],
-      description: "Tour especial del catálogo de marzo. Te muestro el flyer actualizado con los detalles.",
-      aliases: ["rio y playas san juan", "río y playas san juan", "san juan"],
-      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428139/Rio_y_playas_san_juan_ivhnev.jpg",
-      mediaUrls: ["https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428139/Rio_y_playas_san_juan_ivhnev.jpg"],
-    },
-    {
-      key: "marzo_parapente_jarabacoa",
-      id: "tour_marzo_parapente_jarabacoa",
-      title: "Parapente Jarabacoa",
-      bookingMode: "catalog_only",
-      collections: ["marzo"],
-      description: "Tour especial del catálogo de marzo. Te muestro el flyer actualizado con los detalles.",
-      aliases: ["parapente jarabacoa", "parapente"],
-      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428138/Parapente_Jarabacoa_itfvyv.jpg",
-      mediaUrls: ["https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428138/Parapente_Jarabacoa_itfvyv.jpg"],
-    },
-    {
-      key: "marzo_ocean_world_confresi",
-      id: "tour_marzo_ocean_world_confresi",
-      title: "Ocean World Confresí",
-      bookingMode: "catalog_only",
-      collections: ["marzo"],
-      description: "Tour especial del catálogo de marzo. Te muestro el flyer actualizado con los detalles.",
-      aliases: ["ocean world confresi", "ocean world confresí", "ocean world"],
-      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428138/Ocean_world_confresi_punta_cana_wdbjq8.jpg",
-      mediaUrls: ["https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428138/Ocean_world_confresi_punta_cana_wdbjq8.jpg"],
-    },
-    {
-      key: "marzo_jarabacoa_fourwheel",
-      id: "tour_marzo_jarabacoa_fourwheel",
-      title: "Jarabacoa Fourwheel",
-      bookingMode: "catalog_only",
-      collections: ["marzo"],
-      description: "Tour especial del catálogo de marzo. Te muestro el flyer actualizado con los detalles.",
-      aliases: ["jarabacoa fourwheel"],
-      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428136/Jarabacoa_Fourwheel_doakpy.jpg",
-      mediaUrls: ["https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428136/Jarabacoa_Fourwheel_doakpy.jpg"],
-    },
-    {
-      key: "marzo_jarabacoa_city_tours",
-      id: "tour_marzo_jarabacoa_city_tours",
-      title: "Jarabacoa City Tours",
-      bookingMode: "catalog_only",
-      collections: ["marzo"],
-      description: "Tour especial del catálogo de marzo. Te muestro el flyer actualizado con los detalles.",
-      aliases: ["jarabacoa city tours"],
-      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428135/Jarabacoa_City_Tours_lzxkux.jpg",
-      mediaUrls: ["https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428135/Jarabacoa_City_Tours_lzxkux.jpg"],
-    },
-    {
-      key: "marzo_jarabacoa_city_polaris",
-      id: "tour_marzo_jarabacoa_city_polaris",
-      title: "Jarabacoa City Polaris",
-      bookingMode: "catalog_only",
-      collections: ["marzo"],
-      description: "Tour especial del catálogo de marzo. Te muestro el flyer actualizado con los detalles.",
-      aliases: ["jarabacoa city polaris"],
-      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428134/Jarabacoa_city_polaris_y7aea1.jpg",
-      mediaUrls: ["https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428134/Jarabacoa_city_polaris_y7aea1.jpg"],
-    },
-    {
-      key: "marzo_cayo_arena",
-      id: "tour_marzo_cayo_arena",
-      title: "Cayo Arena",
-      bookingMode: "catalog_only",
-      collections: ["marzo"],
-      description: "Tour especial del catálogo de marzo. Te muestro el flyer actualizado con los detalles.",
-      aliases: ["cayo arena"],
-      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428132/Cayo_arena_twyhw9.jpg",
-      mediaUrls: ["https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428132/Cayo_arena_twyhw9.jpg"],
-    },
-    {
-      key: "marzo_ballenas_jorobada",
-      id: "tour_marzo_ballenas_jorobada",
-      title: "Ballenas Jorobada",
-      bookingMode: "catalog_only",
-      collections: ["marzo"],
-      description: "Tour especial del catálogo de marzo. Te muestro el flyer actualizado con los detalles.",
-      aliases: ["ballenas jorobada", "ballenas jorobadas"],
-      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428131/Ballenas_Jorobada_rv0ioc.jpg",
-      mediaUrls: ["https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428131/Ballenas_Jorobada_rv0ioc.jpg"],
-    },
-    {
-      key: "marzo_cayo_levantado",
-      id: "tour_marzo_cayo_levantado",
-      title: "Cayo Levantado",
-      bookingMode: "catalog_only",
-      collections: ["marzo"],
-      description: "Tour especial del catálogo de marzo. Te muestro el flyer actualizado con los detalles.",
-      aliases: ["cayo levantado"],
-      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428131/Cayo_levantado_mxh6gv.jpg",
-      mediaUrls: ["https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428131/Cayo_levantado_mxh6gv.jpg"],
-    },
-
-    // =========================
-    // Tours Semana Santa
-    // =========================
-    {
-      key: "ss_polaris",
-      id: "tour_ss_polaris",
-      title: "Polaris Semana Santa",
-      bookingMode: "catalog_only",
-      collections: ["semana_santa"],
-      description: "Tour especial de Semana Santa. Te muestro el flyer actualizado con los detalles.",
-      aliases: ["polaris semana santa"],
-      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427803/Polaris_mlhvmz.jpg",
-      mediaUrls: ["https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427803/Polaris_mlhvmz.jpg"],
-    },
-    {
-      key: "ss_playa_dominicus",
-      id: "tour_ss_playa_dominicus",
-      title: "Playa Dominicus",
-      bookingMode: "catalog_only",
-      collections: ["semana_santa"],
-      description: "Tour especial de Semana Santa. Te muestro el flyer actualizado con los detalles.",
-      aliases: ["playa dominicus", "dominicus"],
-      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427803/Playa_Dominicus_uj7pg0.jpg",
-      mediaUrls: ["https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427803/Playa_Dominicus_uj7pg0.jpg"],
-    },
-    {
-      key: "ss_jet_ski",
-      id: "tour_ss_jet_ski",
-      title: "Jet Ski Semana Santa",
-      bookingMode: "catalog_only",
-      collections: ["semana_santa"],
-      description: "Tour especial de Semana Santa. Te muestro el flyer actualizado con los detalles.",
-      aliases: ["jet ski semana santa"],
-      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427802/Jet-ski_wr0dk5.jpg",
-      mediaUrls: ["https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427802/Jet-ski_wr0dk5.jpg"],
-    },
-    {
-      key: "ss_aqua_kart",
-      id: "tour_ss_aqua_kart",
-      title: "Aqua Kart Semana Santa",
-      bookingMode: "catalog_only",
-      collections: ["semana_santa"],
-      description: "Tour especial de Semana Santa. Te muestro el flyer actualizado con los detalles.",
-      aliases: ["aqua kart semana santa"],
-      coverImageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427801/Aqua-kart_krqxuj.jpg",
-      mediaUrls: ["https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427801/Aqua-kart_krqxuj.jpg"],
-    },
-  ];
-}
-
-function normalizeTourItem(item) {
-  const t = { ...(item || {}) };
-
-  t.key = String(t.key || "").trim();
-  t.id = String(t.id || "").trim();
-  t.title = String(t.title || "").trim();
-  t.bookingMode = String(
-    t.bookingMode || (t.schedule ? "calendar" : "catalog_only")
-  ).trim();
-
-  t.origins = uniqueStrings(t.origins);
-  t.collections = uniqueStrings(t.collections);
-  t.aliases = uniqueStrings([...(t.aliases || []), t.title, t.key.replace(/_/g, " ")]);
-  t.mediaUrls = uniqueStrings([...(t.mediaUrls || []), t.coverImageUrl]);
-  t.coverImageUrl = t.coverImageUrl || t.mediaUrls[0] || "";
-
-  if (!Array.isArray(t.includes)) t.includes = t.includes ? [String(t.includes)] : [];
-
-  return t;
-}
-
-function mergeTourCatalogs(items) {
-  const map = new Map();
-
-  for (const raw of items || []) {
-    const item = normalizeTourItem(raw);
-    if (!item.key) continue;
-
-    const prev = map.get(item.key);
-    if (!prev) {
-      map.set(item.key, item);
-      continue;
-    }
-
-    map.set(item.key, normalizeTourItem({
-      ...prev,
-      ...item,
-      origins: uniqueStrings([...(prev.origins || []), ...(item.origins || [])]),
-      collections: uniqueStrings([...(prev.collections || []), ...(item.collections || [])]),
-      aliases: uniqueStrings([...(prev.aliases || []), ...(item.aliases || [])]),
-      mediaUrls: uniqueStrings([...(prev.mediaUrls || []), ...(item.mediaUrls || [])]),
-      includes: Array.isArray(item.includes) && item.includes.length ? item.includes : prev.includes,
-      coverImageUrl: item.coverImageUrl || prev.coverImageUrl,
-    }));
-  }
-
-  return Array.from(map.values());
-}
-
-const ENV_TOURS = safeJson(process.env.TOUR_CATALOG_JSON, null);
-const TOURS = mergeTourCatalogs([
-  ...(Array.isArray(ENV_TOURS) ? ENV_TOURS : defaultTourCatalog()),
-  ...defaultVisualTourCatalog(),
-]);
-
+const TOURS = safeJson(process.env.TOUR_CATALOG_JSON, null) || defaultTourCatalog();
 const TOUR_ID_TO_KEY = Object.fromEntries(TOURS.map((t) => [t.id, t.key]));
+
+// =========================
+// CATÁLOGO VISUAL DESDE CLOUDINARY
+// =========================
+const VISUAL_TOUR_COLLECTIONS = [
+  {
+    key: "tours_marzo",
+    title: "Tours de Marzo",
+    intro:
+      "🌴 *Tours de Marzo*\n\nTe muestro las opciones visuales disponibles. Responde con el *número* o con el *nombre del tour* que te interesa.",
+    matchers: ["tours de marzo", "tours marzo", "marzo"],
+    tours: [
+      {
+        key: "mar_santa_fe_full_day",
+        id: "vmar_01",
+        title: "Santa Fe Full Day",
+        imageUrl:
+          "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428140/Santa_Fe_full_day_k2twpq.jpg",
+      },
+      {
+        key: "mar_rio_y_playas_san_juan",
+        id: "vmar_02",
+        title: "Río y Playas San Juan",
+        imageUrl:
+          "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428139/Rio_y_playas_san_juan_ivhnev.jpg",
+      },
+      {
+        key: "mar_parapente_jarabacoa",
+        id: "vmar_03",
+        title: "Parapente Jarabacoa",
+        imageUrl:
+          "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428138/Parapente_Jarabacoa_itfvyv.jpg",
+      },
+      {
+        key: "mar_ocean_world_confresi",
+        id: "vmar_04",
+        title: "Ocean World Confresí",
+        imageUrl:
+          "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428138/Ocean_world_confresi_punta_cana_wdbjq8.jpg",
+      },
+      {
+        key: "mar_jarabacoa_fourwheel",
+        id: "vmar_05",
+        title: "Jarabacoa Fourwheel",
+        imageUrl:
+          "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428136/Jarabacoa_Fourwheel_doakpy.jpg",
+      },
+      {
+        key: "mar_jarabacoa_city_tours",
+        id: "vmar_06",
+        title: "Jarabacoa City Tours",
+        imageUrl:
+          "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428135/Jarabacoa_City_Tours_lzxkux.jpg",
+      },
+      {
+        key: "mar_jarabacoa_city_polaris",
+        id: "vmar_07",
+        title: "Jarabacoa City Polaris",
+        imageUrl:
+          "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428134/Jarabacoa_city_polaris_y7aea1.jpg",
+      },
+      {
+        key: "mar_isla_saona",
+        id: "vmar_08",
+        title: "Isla Saona",
+        imageUrl:
+          "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428133/Isla_Saona_mcvfid.jpg",
+        linkedTourKey: "isla_saona",
+      },
+      {
+        key: "mar_fourwheel_punta_cana",
+        id: "vmar_09",
+        title: "Fourwheel Punta Cana",
+        imageUrl:
+          "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428133/Fourwheel_punta_cana_v8lw1l.jpg",
+      },
+      {
+        key: "mar_cayo_arena",
+        id: "vmar_10",
+        title: "Cayo Arena",
+        imageUrl:
+          "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428132/Cayo_arena_twyhw9.jpg",
+      },
+      {
+        key: "mar_ballenas_jorobada",
+        id: "vmar_11",
+        title: "Ballenas Jorobada",
+        imageUrl:
+          "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428131/Ballenas_Jorobada_rv0ioc.jpg",
+      },
+      {
+        key: "mar_cayo_levantado",
+        id: "vmar_12",
+        title: "Cayo Levantado",
+        imageUrl:
+          "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428131/Cayo_levantado_mxh6gv.jpg",
+      },
+      {
+        key: "mar_buggies_punta_cana",
+        id: "vmar_13",
+        title: "Buggies Punta Cana",
+        imageUrl:
+          "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428130/Buggies_punta_cana_wcqwdl.jpg",
+        linkedTourKey: "buggies_macao",
+      },
+    ],
+  },
+  {
+    key: "tours_punta_cana",
+    title: "Tours desde Punta Cana",
+    intro:
+      "🌴 *Tours desde Punta Cana*\n\nTe muestro las opciones visuales. Responde con el *número* o con el *nombre del tour* que te interesa.",
+    matchers: [
+      "tours desde punta cana",
+      "tour desde punta cana",
+      "tours punta cana",
+      "tour punta cana",
+      "desde punta cana",
+    ],
+    tours: [
+      {
+        key: "pc_scoobadoo",
+        id: "vpc_01",
+        title: "Scoobadoo",
+        imageUrl:
+          "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427504/Scoobadoo_vjqbif.jpg",
+      },
+      {
+        key: "pc_polaris",
+        id: "vpc_02",
+        title: "Polaris",
+        imageUrl:
+          "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427504/Polaris_hgbvqi.jpg",
+      },
+      {
+        key: "pc_maroca",
+        id: "vpc_03",
+        title: "Maroca",
+        imageUrl:
+          "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427503/Maroca_hzzyps.jpg",
+      },
+      {
+        key: "pc_jet_ski",
+        id: "vpc_04",
+        title: "Jet Ski",
+        imageUrl:
+          "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427503/Jet-ski_kfxska.jpg",
+      },
+      {
+        key: "pc_jet_cars",
+        id: "vpc_05",
+        title: "Jet Cars",
+        imageUrl:
+          "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427502/Jet-cars_pu2p3w.jpg",
+      },
+      {
+        key: "pc_isla_catalina",
+        id: "vpc_06",
+        title: "Isla Catalina",
+        imageUrl:
+          "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427501/Isla_Catalina_kavssn.jpg",
+        linkedTourKey: "isla_catalina",
+      },
+      {
+        key: "pc_horseback_riding",
+        id: "vpc_07",
+        title: "Horseback Riding",
+        imageUrl:
+          "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427501/Horseback_Riding_fwojde.jpg",
+      },
+      {
+        key: "pc_fourwheel",
+        id: "vpc_08",
+        title: "Fourwheel",
+        imageUrl:
+          "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427500/Fourwheel_cixu6i.jpg",
+      },
+      {
+        key: "pc_dorado_park",
+        id: "vpc_09",
+        title: "Dorado Park",
+        imageUrl:
+          "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427500/Dorado_Park_p8unjz.jpg",
+      },
+      {
+        key: "pc_dolphin_ocean_adventure",
+        id: "vpc_10",
+        title: "Dolphin Ocean Adventure",
+        imageUrl:
+          "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427500/Dolphin_ocean_aventure_tzzspl.jpg",
+      },
+      {
+        key: "pc_coco_bongo",
+        id: "vpc_11",
+        title: "Coco Bongo",
+        imageUrl:
+          "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427500/Coco_Bongo_dknp2w.jpg",
+      },
+      {
+        key: "pc_cayo_new",
+        id: "vpc_12",
+        title: "Cayo New",
+        imageUrl:
+          "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427500/Cayo_New_m0ke20.jpg",
+      },
+      {
+        key: "pc_buggies",
+        id: "vpc_13",
+        title: "Buggies",
+        imageUrl:
+          "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427499/Buggies_d3s2th.jpg",
+        linkedTourKey: "buggies_macao",
+      },
+      {
+        key: "pc_jet_ski_aqua_kart_polaris",
+        id: "vpc_14",
+        title: "Jet Ski + Aqua Kart + Polaris",
+        imageUrl:
+          "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427499/3-_Jet-sky_Aqua-kart_Polaris_lm2sht.jpg",
+      },
+      {
+        key: "pc_jet_ski_aqua_kart",
+        id: "vpc_15",
+        title: "Jet Ski + Aqua Kart",
+        imageUrl:
+          "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427499/2_-Jet-skit_Aqua-kart_cxpyzj.jpg",
+      },
+      {
+        key: "pc_boat_party",
+        id: "vpc_16",
+        title: "Boat Party",
+        imageUrl:
+          "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427499/Boat_Party_g3iycw.jpg",
+      },
+    ],
+  },
+  {
+    key: "tours_semana_santa",
+    title: "Tours Semana Santa",
+    intro:
+      "🌴 *Tours Semana Santa*\n\nEstas son las opciones visuales. Responde con el *número* o con el *nombre del tour* que te interesa.",
+    matchers: ["semana santa", "tours semana santa", "tour semana santa"],
+    tours: [
+      {
+        key: "ss_polaris",
+        id: "vss_01",
+        title: "Polaris",
+        imageUrl:
+          "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427803/Polaris_mlhvmz.jpg",
+      },
+      {
+        key: "ss_playa_dominicus",
+        id: "vss_02",
+        title: "Playa Dominicus",
+        imageUrl:
+          "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427803/Playa_Dominicus_uj7pg0.jpg",
+      },
+      {
+        key: "ss_jet_ski",
+        id: "vss_03",
+        title: "Jet Ski",
+        imageUrl:
+          "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427802/Jet-ski_wr0dk5.jpg",
+      },
+      {
+        key: "ss_isla_saona_2",
+        id: "vss_04",
+        title: "Isla Saona 2",
+        imageUrl:
+          "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427802/Isla_Saona2_z0kre2.jpg",
+        linkedTourKey: "isla_saona",
+      },
+      {
+        key: "ss_isla_saona",
+        id: "vss_05",
+        title: "Isla Saona",
+        imageUrl:
+          "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427801/Isla_Saona_sndbbm.jpg",
+        linkedTourKey: "isla_saona",
+      },
+      {
+        key: "ss_aqua_kart",
+        id: "vss_06",
+        title: "Aqua Kart",
+        imageUrl:
+          "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427801/Aqua-kart_krqxuj.jpg",
+      },
+      {
+        key: "ss_isla_catalina",
+        id: "vss_07",
+        title: "Isla Catalina",
+        imageUrl:
+          "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773427800/Isla_Catalina_hxfyjm.jpg",
+        linkedTourKey: "isla_catalina",
+      },
+    ],
+  },
+];
+
+const VISUAL_COLLECTION_BY_KEY = Object.fromEntries(
+  VISUAL_TOUR_COLLECTIONS.map((c) => [c.key, c])
+);
+
+const VISUAL_TOURS = VISUAL_TOUR_COLLECTIONS.flatMap((collection) =>
+  collection.tours.map((tour) => ({
+    ...tour,
+    collectionKey: collection.key,
+    collectionTitle: collection.title,
+  }))
+);
+
+const VISUAL_TOUR_BY_KEY = Object.fromEntries(
+  VISUAL_TOURS.map((t) => [t.key, t])
+);
+
+const VISUAL_TOUR_ID_TO_KEY = Object.fromEntries(
+  VISUAL_TOURS.map((t) => [t.id, t.key])
+);
 
 function getServiceLineByKey(key) {
   return SERVICE_LINES.find((s) => s.key === key) || null;
@@ -1288,10 +1375,6 @@ function getCategoryByKey(key) {
   return TOUR_CATEGORIES.find((c) => c.key === key) || null;
 }
 
-function getCollectionByKey(key) {
-  return TOUR_COLLECTIONS.find((c) => c.key === key) || null;
-}
-
 function getTourByKey(key) {
   return TOURS.find((t) => t.key === key) || null;
 }
@@ -1301,20 +1384,17 @@ function getToursByCategory(categoryKey) {
 }
 
 function getToursByOrigin(originKey) {
-  return TOURS.filter((t) => Array.isArray(t.origins) && t.origins.includes(originKey));
+  return TOURS.filter(
+    (t) => !Array.isArray(t.origins) || t.origins.includes(originKey)
+  );
 }
 
-function getToursByCollection(collectionKey) {
-  return TOURS.filter((t) => Array.isArray(t.collections) && t.collections.includes(collectionKey));
+function getVisualCollectionByKey(key) {
+  return VISUAL_COLLECTION_BY_KEY[key] || null;
 }
 
-function normalizeText(t) {
-  return (t || "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .replace(/\s+/g, " ")
-    .trim();
+function getVisualTourByKey(key) {
+  return VISUAL_TOUR_BY_KEY[key] || null;
 }
 
 function verifyMetaSignature(req) {
@@ -1324,7 +1404,10 @@ function verifyMetaSignature(req) {
 
   const expected =
     "sha256=" +
-    crypto.createHmac("sha256", META_APP_SECRET).update(req.rawBody || Buffer.from("")).digest("hex");
+    crypto
+      .createHmac("sha256", META_APP_SECRET)
+      .update(req.rawBody || Buffer.from(""))
+      .digest("hex");
 
   try {
     return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
@@ -1357,7 +1440,9 @@ function isGreeting(textNorm) {
     "hi",
   ];
 
-  const isOnlyGreeting = greetings.some((g) => t === g || t.startsWith(g + " ")) || /^(hola+|buenas+)\b/.test(t);
+  const isOnlyGreeting =
+    greetings.some((g) => t === g || t.startsWith(g + " ")) ||
+    /^(hola+|buenas+)\b/.test(t);
 
   const hasTravelIntent =
     t.includes("tour") ||
@@ -1383,6 +1468,7 @@ function quickHelpText() {
   return (
     `¡Hola! 😊\n` +
     `Puedo ayudarte con *Tours en República Dominicana*, *Boletos aéreos*, *Solo hoteles*, *Seguros de viaje*, *Traslados* y *Paquetes vacacionales*.\n\n` +
+    `También puedes escribirme *"Tours desde Punta Cana"*, *"Tours de Marzo"* o *"Semana Santa"*.\n\n` +
     `Escribe *"menú"* para ver las opciones.`
   );
 }
@@ -1398,27 +1484,33 @@ function isChoice(textNorm, n) {
   return t === String(n) || t === `${n}.` || t.startsWith(`${n} `);
 }
 
+function isBackCommand(textNorm) {
+  return ["volver", "atras", "atrás", "regresar"].some(
+    (k) => textNorm === k || textNorm.includes(k)
+  );
+}
+
 function looksLikeConfirm(textNorm) {
-  return ["confirmar", "confirmo", "confirmada", "confirmado", "confirmacion", "confirmación"].some((k) =>
-    (textNorm || "").includes(k)
+  return ["confirmar", "confirmo", "confirmada", "confirmado", "confirmacion", "confirmación"].some(
+    (k) => (textNorm || "").includes(k)
   );
 }
 
 function looksLikeCancel(textNorm) {
-  return ["cancelar", "cancela", "anular", "anula", "ya no", "cancelacion", "cancelación"].some((k) =>
-    (textNorm || "").includes(k)
+  return ["cancelar", "cancela", "anular", "anula", "ya no", "cancelacion", "cancelación"].some(
+    (k) => (textNorm || "").includes(k)
   );
 }
 
 function looksLikeReschedule(textNorm) {
-  return ["reprogramar", "reprograma", "cambiar", "cambio", "mover", "otro horario", "otra fecha"].some((k) =>
-    (textNorm || "").includes(k)
+  return ["reprogramar", "reprograma", "cambiar", "cambio", "mover", "otro horario", "otra fecha"].some(
+    (k) => (textNorm || "").includes(k)
   );
 }
 
 function looksLikeNewReservation(textNorm) {
-  return ["nueva reserva", "otra reserva", "reservar", "reserva nueva", "quiero reservar"].some((k) =>
-    (textNorm || "").includes(k)
+  return ["nueva reserva", "otra reserva", "reservar", "reserva nueva", "quiero reservar"].some(
+    (k) => (textNorm || "").includes(k)
   );
 }
 
@@ -1429,24 +1521,26 @@ function wantsQuote(textNorm) {
 }
 
 function wantsIncludes(textNorm) {
-  return ["que incluye", "qué incluye", "incluye", "incluido"].some((k) => (textNorm || "").includes(k));
+  return ["que incluye", "qué incluye", "incluye", "incluido"].some(
+    (k) => (textNorm || "").includes(k)
+  );
 }
 
 function wantsSchedule(textNorm) {
-  return ["horario", "hora", "horas", "sale", "salida", "salen", "punto de encuentro"].some((k) =>
-    (textNorm || "").includes(k)
+  return ["horario", "hora", "horas", "sale", "salida", "salen", "punto de encuentro"].some(
+    (k) => (textNorm || "").includes(k)
   );
 }
 
 function wantsPayments(textNorm) {
-  return ["forma de pago", "formas de pago", "pago", "pagos", "transferencia", "tarjeta"].some((k) =>
-    (textNorm || "").includes(k)
+  return ["forma de pago", "formas de pago", "pago", "pagos", "transferencia", "tarjeta"].some(
+    (k) => (textNorm || "").includes(k)
   );
 }
 
 function wantsPolicies(textNorm) {
-  return ["politica", "política", "reserva", "cancelacion", "cancelación"].some((k) =>
-    (textNorm || "").includes(k)
+  return ["politica", "política", "reserva", "cancelacion", "cancelación"].some(
+    (k) => (textNorm || "").includes(k)
   );
 }
 
@@ -1476,14 +1570,24 @@ function getZonedParts(date, timeZone) {
 
 function getOffsetMinutes(date, timeZone) {
   const p = getZonedParts(date, timeZone);
-  const asUTC = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second);
+  const asUTC = Date.UTC(
+    p.year,
+    p.month - 1,
+    p.day,
+    p.hour,
+    p.minute,
+    p.second
+  );
   return (asUTC - date.getTime()) / 60000;
 }
 
 function zonedTimeToUtc({ year, month, day, hour, minute, second = 0 }, timeZone) {
   const guess = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
   const offsetMin = getOffsetMinutes(guess, timeZone);
-  return new Date(Date.UTC(year, month - 1, day, hour, minute, second) - offsetMin * 60000);
+  return new Date(
+    Date.UTC(year, month - 1, day, hour, minute, second) -
+      offsetMin * 60000
+  );
 }
 
 function formatTimeInTZ(iso, timeZone) {
@@ -1509,43 +1613,15 @@ function formatDateInTZ(iso, timeZone) {
 
 function getNowPlusLeadUTC() {
   const now = new Date();
-  const lead = Math.max(0, Number.isFinite(MIN_BOOKING_LEAD_MIN) ? MIN_BOOKING_LEAD_MIN : 120);
+  const lead = Math.max(
+    0,
+    Number.isFinite(MIN_BOOKING_LEAD_MIN) ? MIN_BOOKING_LEAD_MIN : 120
+  );
   return addMinutes(now, lead);
 }
 
 function currency(n) {
   return `${PRICE_CURRENCY}${Number(n || 0).toFixed(0)}`;
-}
-
-function normalizePhoneDigits(raw) {
-  return String(raw || "").replace(/[^\d]/g, "");
-}
-
-function toE164DigitsRD(phoneDigits) {
-  const d = normalizePhoneDigits(phoneDigits);
-  if (d.length === 10) return "1" + d;
-  if (d.length === 11 && d.startsWith("1")) return d;
-  return d;
-}
-
-function buildPhoneVariants(raw) {
-  const d = normalizePhoneDigits(raw);
-  if (!d) return [];
-
-  const set = new Set([d]);
-  const e164 = toE164DigitsRD(d);
-  if (e164) set.add(e164);
-
-  if (d.length === 11 && d.startsWith("1")) set.add(d.slice(1));
-  if (d.length === 10) set.add("1" + d);
-
-  return Array.from(set).filter(Boolean);
-}
-
-function waRowTitle(title, max = 24) {
-  const clean = String(title || "").replace(/\s+/g, " ").trim();
-  if (!clean) return "";
-  return clean.length <= max ? clean : clean.slice(0, max).trim();
 }
 
 function serviceLineRowTitle(service) {
@@ -1607,13 +1683,14 @@ function detectCatalogRequest(textNorm) {
   );
 }
 
-function detectTourCollectionFromUser(text) {
+function detectVisualCollectionKeyFromUser(text) {
   const t = normalizeText(text);
-
-  if (TOUR_COLLECTION_ID_TO_KEY[text]) return TOUR_COLLECTION_ID_TO_KEY[text];
-  if (t === "marzo" || t.includes("tours de marzo") || t.includes("tour de marzo")) return "marzo";
-  if (t.includes("semana santa")) return "semana_santa";
-
+  for (const collection of VISUAL_TOUR_COLLECTIONS) {
+    for (const m of collection.matchers) {
+      const mm = normalizeText(m);
+      if (t === mm || t.includes(mm)) return collection.key;
+    }
+  }
   return null;
 }
 
@@ -1739,11 +1816,17 @@ function detectCategoryKeyFromUser(text) {
   const t = normalizeText(text);
   if (CATEGORY_ID_TO_KEY[text]) return CATEGORY_ID_TO_KEY[text];
 
-  if (matchesCategoryText(t, "Tours diarios") || matchesCategoryText(t, "Tour diario")) {
+  if (
+    matchesCategoryText(t, "Tours diarios") ||
+    matchesCategoryText(t, "Tour diario")
+  ) {
     return "tours_diarios";
   }
 
-  if (matchesCategoryText(t, "Playas") || matchesCategoryText(t, "Playa")) {
+  if (
+    matchesCategoryText(t, "Playas") ||
+    matchesCategoryText(t, "Playa")
+  ) {
     return "playas";
   }
 
@@ -1783,16 +1866,10 @@ function detectTourKeyFromUser(text) {
   if (TOUR_ID_TO_KEY[text]) return TOUR_ID_TO_KEY[text];
 
   for (const tour of TOURS) {
-    const titleNorm = normalizeText(tour.title);
-    if (titleNorm && (t === titleNorm || t.includes(titleNorm))) return tour.key;
-
-    for (const alias of tour.aliases || []) {
-      const aliasNorm = normalizeText(alias);
-      if (aliasNorm && (t === aliasNorm || t.includes(aliasNorm))) return tour.key;
-    }
-
+    const nt = normalizeText(tour.title);
+    if (t === nt || t.includes(nt)) return tour.key;
     const keyNorm = normalizeText(tour.key.replace(/_/g, " "));
-    if (keyNorm && t.includes(keyNorm)) return tour.key;
+    if (t.includes(keyNorm)) return tour.key;
   }
 
   if (t.includes("saona")) return "isla_saona";
@@ -1801,6 +1878,25 @@ function detectTourKeyFromUser(text) {
   if (t.includes("jarabacoa")) return "jarabacoa_aventura";
   if (t.includes("buggies") || t.includes("macao")) return "buggies_macao";
   if (t.includes("samana") || t.includes("samaná")) return "samana_temporada";
+
+  return null;
+}
+
+function detectVisualTourKeyFromUser(text, collectionKey = null) {
+  if (VISUAL_TOUR_ID_TO_KEY[text]) return VISUAL_TOUR_ID_TO_KEY[text];
+
+  const t = normalizeText(text);
+  const pool = collectionKey
+    ? (getVisualCollectionByKey(collectionKey)?.tours || []).map((x) => ({
+        ...x,
+        collectionKey,
+      }))
+    : VISUAL_TOURS;
+
+  for (const tour of pool) {
+    const titleNorm = normalizeText(tour.title);
+    if (t === titleNorm || t.includes(titleNorm)) return tour.key;
+  }
 
   return null;
 }
@@ -1835,36 +1931,23 @@ function parsePassengerCount(text) {
   return null;
 }
 
-function isCalendarTour(tour) {
-  return String(tour?.bookingMode || "calendar") === "calendar";
-}
-
-function isCatalogOnlyTour(tour) {
-  return !isCalendarTour(tour);
-}
-
-function buildCatalogOnlyTourInfoText(tour) {
-  if (!tour) return "";
-
-  return (
-    `🌴 *${tour.title}*\n` +
-    `${tour.description || "Te comparto el flyer actualizado con los detalles visuales del tour."}\n\n` +
-    `🖼️ Revisa el flyer que te envié para ver la información del tour.\n` +
-    `📌 Si deseas cotizar o reservar, dime la *fecha* o *temporada* que te interesa.`
-  );
-}
-
 function buildTourInfoText(tour) {
   if (!tour) return "";
 
   return (
     `🌴 *${tour.title}*\n` +
     `${tour.description}\n\n` +
-    `💵 Desde *${currency(tour.basePriceAdult)}* adultos y *${currency(tour.basePriceChild)}* niños\n` +
+    `💵 Desde *${currency(tour.basePriceAdult)}* adultos y *${currency(
+      tour.basePriceChild
+    )}* niños\n` +
     `⏳ Duración: ${tour.durationLabel}\n` +
     `📍 Punto de encuentro: ${tour.meetingPoint}\n` +
     `🚐 Salida / pickup: ${tour.pickupOptions}\n` +
-    `✅ Incluye: ${Array.isArray(tour.includes) ? tour.includes.join(", ") : String(tour.includes || "Consultar")}\n` +
+    `✅ Incluye: ${
+      Array.isArray(tour.includes)
+        ? tour.includes.join(", ")
+        : String(tour.includes || "Consultar")
+    }\n` +
     `💳 Pago: ${tour.paymentMethods}\n` +
     `📌 Reserva: ${tour.reservationPolicy}\n\n` +
     `Si deseas el documento informativo, escribe *catálogo*.`
@@ -1873,16 +1956,25 @@ function buildTourInfoText(tour) {
 
 function buildTourFaqReply(tour, textNorm) {
   if (!tour) return "";
-  if (isCatalogOnlyTour(tour)) return buildCatalogOnlyTourInfoText(tour);
 
   const parts = [`🌴 *${tour.title}*`];
 
   if (wantsQuote(textNorm)) {
-    parts.push(`💵 Precio base: Adultos *${currency(tour.basePriceAdult)}* / Niños *${currency(tour.basePriceChild)}*`);
+    parts.push(
+      `💵 Precio base: Adultos *${currency(
+        tour.basePriceAdult
+      )}* / Niños *${currency(tour.basePriceChild)}*`
+    );
   }
 
   if (wantsIncludes(textNorm)) {
-    parts.push(`✅ Incluye: ${Array.isArray(tour.includes) ? tour.includes.join(", ") : String(tour.includes || "Consultar")}`);
+    parts.push(
+      `✅ Incluye: ${
+        Array.isArray(tour.includes)
+          ? tour.includes.join(", ")
+          : String(tour.includes || "Consultar")
+      }`
+    );
   }
 
   if (wantsSchedule(textNorm)) {
@@ -1912,7 +2004,9 @@ function buildTourFaqReply(tour, textNorm) {
 function buildQuotePreview(tour, adults, children) {
   const a = Number(adults || 0);
   const c = Number(children || 0);
-  const total = a * Number(tour?.basePriceAdult || 0) + c * Number(tour?.basePriceChild || 0);
+  const total =
+    a * Number(tour?.basePriceAdult || 0) +
+    c * Number(tour?.basePriceChild || 0);
 
   return (
     `💵 *Cotización estimada*\n` +
@@ -1920,7 +2014,11 @@ function buildQuotePreview(tour, adults, children) {
     `Adultos: ${a} x ${currency(tour?.basePriceAdult || 0)}\n` +
     `Niños: ${c} x ${currency(tour?.basePriceChild || 0)}\n` +
     `Total estimado: *${currency(total)}*\n\n` +
-    `*Incluye:* ${Array.isArray(tour?.includes) ? tour.includes.join(", ") : String(tour?.includes || "Consultar")}\n` +
+    `*Incluye:* ${
+      Array.isArray(tour?.includes)
+        ? tour.includes.join(", ")
+        : String(tour?.includes || "Consultar")
+    }\n` +
     `*Pago:* ${tour?.paymentMethods || "Consultar"}`
   );
 }
@@ -1965,7 +2063,7 @@ function categoriesEmojiText() {
     `⛰️ Montañas\n` +
     `✨ Excursiones especiales\n` +
     `🎒 Paquetes de temporada\n\n` +
-    `También puedo mostrarte *Tours de Marzo* o *Tours Semana Santa* si lo escribes así.`
+    `O si prefieres, escribe *"Tours desde Punta Cana"*, *"Tours de Marzo"* o *"Semana Santa"* para ver el catálogo visual.`
   );
 }
 
@@ -1982,39 +2080,59 @@ function mainMenuText() {
     `👤 Hablar con un asesor\n` +
     `📍 Ubicación y contacto\n` +
     `📄 Catálogo PDF\n\n` +
-    `También puedes escribirme cosas como *"Tours desde Punta Cana"*, *"Tours de Marzo"* o *"Semana Santa"* y te muestro opciones.`
+    `También puedes escribirme cosas como *"Tours desde Punta Cana"*, *"Tours de Marzo"* o *"Semana Santa"* y te muestro opciones.\n\n` +
+    `Elige una opción del menú o escríbeme directamente lo que buscas.`
   );
 }
 
 function buildLocationContactText() {
-  const addressLine = BUSINESS_ADDRESS ? `📍 Dirección: ${BUSINESS_ADDRESS}\n` : "";
+  const addressLine = BUSINESS_ADDRESS
+    ? `📍 Dirección: ${BUSINESS_ADDRESS}\n`
+    : "";
+  return (`📍 *Ubicación y contacto*\n\n` + `${addressLine}` + `${MARKET_CONTACT_TEXT}`).trim();
+}
+
+function buildVisualCollectionText(collectionKey) {
+  const collection = getVisualCollectionByKey(collectionKey);
+  if (!collection) return "No encontré esa colección visual.";
+
+  const lines = collection.tours.map((t, i) => `${i + 1}. ${t.title}`);
+  return `${collection.intro}\n\n${lines.join("\n")}`;
+}
+
+function buildVisualTourIntroText(visualTour) {
+  if (!visualTour) return "";
   return (
-    `📍 *Ubicación y contacto*\n\n` +
-    `${addressLine}` +
-    `${MARKET_CONTACT_TEXT}`
-  ).trim();
+    `🌴 *${visualTour.title}*\n` +
+    `Colección: *${visualTour.collectionTitle || "Catálogo visual"}*\n\n` +
+    `Te acabo de enviar la imagen del tour con la información visual.\n\n` +
+    `Si te interesa, dime la *fecha* en que quieres hacerlo.`
+  );
 }
 
-function buildRowsSections(rows, baseTitle) {
-  const chunks = chunkArray(rows, 10);
-  return chunks.map((chunk, idx) => ({
-    title: waRowTitle(chunks.length > 1 ? `${baseTitle} ${idx + 1}` : baseTitle),
-    rows: chunk,
-  }));
-}
+function tryPickVisualTourFromUserText(session, userText) {
+  const t = normalizeText(userText);
 
-function tourListDescription(tour) {
-  if (!tour) return "Consultar";
-
-  if (isCalendarTour(tour) && Number.isFinite(Number(tour.basePriceAdult))) {
-    return `${PRICE_CURRENCY}${tour.basePriceAdult} adulto • ${tour.durationLabel || "Consultar"}`.slice(0, 72);
+  if (/^\d+$/.test(t)) {
+    const num = parseInt(t, 10);
+    if (!Number.isNaN(num) && num >= 1 && num <= (session.lastVisualOptions?.length || 0)) {
+      const key = session.lastVisualOptions[num - 1];
+      return getVisualTourByKey(key) || null;
+    }
   }
 
-  if (tour.collections?.includes("semana_santa")) return "Especial Semana Santa".slice(0, 72);
-  if (tour.collections?.includes("marzo")) return "Especial de marzo".slice(0, 72);
-  if (tour.origins?.includes("punta_cana")) return "Desde Punta Cana • Ver flyer".slice(0, 72);
+  const byId = detectVisualTourKeyFromUser(userText, session.pendingVisualCollection);
+  if (byId) return getVisualTourByKey(byId);
 
-  return "Ver flyer y detalles".slice(0, 72);
+  const collection = getVisualCollectionByKey(session.pendingVisualCollection);
+  if (!collection) return null;
+
+  for (const item of collection.tours) {
+    const titleNorm = normalizeText(item.title);
+    if (t === titleNorm || t.includes(titleNorm)) return item;
+  }
+
+  return null;
 }
 
 // =========================
@@ -2024,7 +2142,12 @@ async function sendWhatsAppText(to, text, reportSource = "BOT") {
   const url = `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`;
   await axios.post(
     url,
-    { messaging_product: "whatsapp", to, type: "text", text: { body: text } },
+    {
+      messaging_product: "whatsapp",
+      to,
+      type: "text",
+      text: { body: text },
+    },
     { headers: { Authorization: `Bearer ${WA_TOKEN}` } }
   );
 
@@ -2066,9 +2189,7 @@ async function sendWhatsAppImage(to, imageUrl, caption = "", reportSource = "BOT
 }
 
 async function sendWhatsAppDocument(to, documentUrl, filename, caption = "", reportSource = "BOT") {
-  if (!documentUrl) {
-    throw new Error("documentUrl is required");
-  }
+  if (!documentUrl) throw new Error("documentUrl is required");
 
   const url = `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`;
   await axios.post(
@@ -2124,52 +2245,88 @@ async function sendReminderWhatsAppToBestTarget(priv, fallbackPhoneDigits, text)
     }
   }
 
-  return { ok: false, tried, error: lastErr?.response?.data || lastErr?.message || lastErr };
+  return {
+    ok: false,
+    tried,
+    error: lastErr?.response?.data || lastErr?.message || lastErr,
+  };
 }
 
-async function sendInteractiveList(to, { headerText, bodyText, buttonText, sections, renderedBody, meta }) {
-  const url = `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`;
+async function sendInteractiveListOrFallback(
+  to,
+  {
+    headerText,
+    bodyText,
+    footerText = BUSINESS_NAME,
+    buttonText = "Ver opciones",
+    sectionTitle = "Opciones",
+    rows = [],
+    renderedText = "",
+    reportMeta = {},
+  }
+) {
+  const safeRows = (rows || []).slice(0, 10).map((r) => ({
+    id: clipText(r.id, 200),
+    title: waRowTitle(r.title || ""),
+    description: clipText(r.description || "", 72),
+  }));
 
-  await axios.post(
-    url,
-    {
-      messaging_product: "whatsapp",
-      to,
-      type: "interactive",
-      interactive: {
-        type: "list",
-        header: { type: "text", text: headerText },
-        body: { text: bodyText },
-        footer: { text: BUSINESS_NAME },
-        action: { button: buttonText, sections },
-      },
-    },
-    { headers: { Authorization: `Bearer ${WA_TOKEN}` } }
-  );
-
-  await bothubReportMessage({
-    direction: "OUTBOUND",
-    to: String(to),
-    body: renderedBody,
-    source: "BOT",
-    kind: "LIST",
-    meta,
-  });
-}
-
-async function sendTourPresentation(to, tour) {
-  if (!tour) return;
-
-  if (tour.coverImageUrl) {
-    try {
-      await sendWhatsAppImage(to, tour.coverImageUrl, `🌴 ${tour.title}`, "BOT");
-    } catch (e) {
-      console.error("sendTourPresentation image error:", e?.response?.data || e?.message || e);
-    }
+  if (!safeRows.length) {
+    await sendWhatsAppText(to, renderedText || bodyText || "No hay opciones disponibles ahora mismo.");
+    return false;
   }
 
-  const text = isCatalogOnlyTour(tour) ? buildCatalogOnlyTourInfoText(tour) : buildTourInfoText(tour);
-  await sendWhatsAppText(to, text, "BOT");
+  try {
+    const url = `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`;
+    await axios.post(
+      url,
+      {
+        messaging_product: "whatsapp",
+        to,
+        type: "interactive",
+        interactive: {
+          type: "list",
+          header: { type: "text", text: clipText(headerText, 60) },
+          body: { text: clipText(bodyText, 1024) },
+          footer: { text: clipText(footerText, 60) },
+          action: {
+            button: clipText(buttonText, 20),
+            sections: [
+              {
+                title: clipText(sectionTitle, 24),
+                rows: safeRows,
+              },
+            ],
+          },
+        },
+      },
+      { headers: { Authorization: `Bearer ${WA_TOKEN}` } }
+    );
+
+    await bothubReportMessage({
+      direction: "OUTBOUND",
+      to: String(to),
+      body: renderedText || bodyText,
+      source: "BOT",
+      kind: "LIST",
+      meta: { rows: safeRows, ...reportMeta },
+    });
+
+    return true;
+  } catch (e) {
+    console.error(
+      "Interactive list failed, fallback to text:",
+      e?.response?.data || e?.message || e
+    );
+    await sendWhatsAppText(
+      to,
+      renderedText ||
+        `${headerText}\n\n${bodyText}\n\n${safeRows
+          .map((r, i) => `${i + 1}. ${r.title}${r.description ? ` — ${r.description}` : ""}`)
+          .join("\n")}`
+    );
+    return false;
+  }
 }
 
 async function sendServiceLinesList(to) {
@@ -2179,18 +2336,18 @@ async function sendServiceLinesList(to) {
     description: "",
   }));
 
-  const sections = [{ title: "Servicios", rows }];
   const rendered =
     `*Servicios disponibles*\nSelecciona el servicio que te interesa 👇\n\n` +
     rows.map((r) => `• [${r.id}] ${r.title}`).join("\n");
 
-  await sendInteractiveList(to, {
+  await sendInteractiveListOrFallback(to, {
     headerText: "Servicios disponibles",
     bodyText: "Selecciona el servicio que te interesa 👇",
     buttonText: "Ver opciones",
-    sections,
-    renderedBody: rendered,
-    meta: { rows },
+    sectionTitle: "Servicios",
+    rows,
+    renderedText: rendered,
+    reportMeta: { rows },
   });
 }
 
@@ -2201,18 +2358,18 @@ async function sendTourOriginsList(to) {
     description: "",
   }));
 
-  const sections = [{ title: "Salidas", rows }];
   const rendered =
     `*Origen del tour*\n¿Desde dónde deseas salir? 👇\n\n` +
     rows.map((r) => `• [${r.id}] ${r.title}`).join("\n");
 
-  await sendInteractiveList(to, {
+  await sendInteractiveListOrFallback(to, {
     headerText: "Origen del tour",
     bodyText: "¿Desde dónde deseas salir? 👇",
     buttonText: "Elegir origen",
-    sections,
-    renderedBody: rendered,
-    meta: { rows },
+    sectionTitle: "Salidas",
+    rows,
+    renderedText: rendered,
+    reportMeta: { rows },
   });
 }
 
@@ -2223,18 +2380,18 @@ async function sendPackageDestinationsList(to) {
     description: "",
   }));
 
-  const sections = [{ title: "Destinos", rows }];
   const rendered =
     `*Paquetes vacacionales*\nElige el destino que te interesa 👇\n\n` +
     rows.map((r) => `• [${r.id}] ${r.title}`).join("\n");
 
-  await sendInteractiveList(to, {
+  await sendInteractiveListOrFallback(to, {
     headerText: "Paquetes vacacionales",
     bodyText: "Elige el destino que te interesa 👇",
     buttonText: "Ver destinos",
-    sections,
-    renderedBody: rendered,
-    meta: { rows },
+    sectionTitle: "Destinos",
+    rows,
+    renderedText: rendered,
+    reportMeta: { rows },
   });
 }
 
@@ -2245,18 +2402,18 @@ async function sendCategoriesList(to) {
     description: "",
   }));
 
-  const sections = [{ title: "Categorías", rows }];
   const rendered =
     `*Categorías de tours*\nSelecciona una categoría para ver opciones 👇\n\n` +
     rows.map((r) => `• [${r.id}] ${r.title}`).join("\n");
 
-  await sendInteractiveList(to, {
+  await sendInteractiveListOrFallback(to, {
     headerText: "Categorías de tours",
     bodyText: "Selecciona una categoría para ver opciones disponibles 👇",
     buttonText: "Ver categorías",
-    sections,
-    renderedBody: rendered,
-    meta: { rows },
+    sectionTitle: "Categorías",
+    rows,
+    renderedText: rendered,
+    reportMeta: { rows },
   });
 }
 
@@ -2269,24 +2426,24 @@ async function sendToursListByCategory(to, categoryKey) {
     return;
   }
 
-  const rows = tours.map((t) => ({
+  const rows = tours.slice(0, 10).map((t) => ({
     id: t.id,
     title: waRowTitle(t.title),
-    description: tourListDescription(t),
+    description: clipText(`${PRICE_CURRENCY}${t.basePriceAdult} adulto • ${t.durationLabel}`, 72),
   }));
 
-  const sections = buildRowsSections(rows, category.title);
   const rendered =
     `*${category.title}*\nElige un tour para ver precio, detalles y reservar 👇\n\n` +
     rows.map((r) => `• [${r.id}] ${r.title} — ${r.description}`).join("\n");
 
-  await sendInteractiveList(to, {
+  await sendInteractiveListOrFallback(to, {
     headerText: category.title,
     bodyText: "Elige un tour para ver precio, detalles y reservar 👇",
     buttonText: "Ver tours",
-    sections,
-    renderedBody: rendered,
-    meta: { rows, category: categoryKey },
+    sectionTitle: waRowTitle(category.title),
+    rows,
+    renderedText: rendered,
+    reportMeta: { rows, category: categoryKey },
   });
 }
 
@@ -2295,59 +2452,63 @@ async function sendToursListByOrigin(to, originKey) {
   const tours = getToursByOrigin(originKey);
 
   if (!origin || !tours.length) {
-    await sendWhatsAppText(to, "No encontré tours disponibles para ese punto de salida ahora mismo 🙏");
+    await sendWhatsAppText(
+      to,
+      "No encontré tours disponibles para ese punto de salida ahora mismo 🙏"
+    );
     return;
   }
 
-  const rows = tours.map((t) => ({
+  const rows = tours.slice(0, 10).map((t) => ({
     id: t.id,
     title: waRowTitle(t.title),
-    description: tourListDescription(t),
+    description: clipText(`${PRICE_CURRENCY}${t.basePriceAdult} adulto • ${t.durationLabel}`, 72),
   }));
 
-  const sections = buildRowsSections(rows, origin.title);
   const rendered =
     `*Salidas desde ${origin.title}*\nElige un tour para ver detalles y reservar 👇\n\n` +
     rows.map((r) => `• [${r.id}] ${r.title} — ${r.description}`).join("\n");
 
-  await sendInteractiveList(to, {
+  await sendInteractiveListOrFallback(to, {
     headerText: `Salidas desde ${origin.title}`,
     bodyText: "Elige un tour para ver detalles y reservar 👇",
     buttonText: "Ver tours",
-    sections,
-    renderedBody: rendered,
-    meta: { rows, origin: originKey },
+    sectionTitle: waRowTitle(origin.title),
+    rows,
+    renderedText: rendered,
+    reportMeta: { rows, origin: originKey },
   });
 }
 
-async function sendToursListByCollection(to, collectionKey) {
-  const collection = getCollectionByKey(collectionKey);
-  const tours = getToursByCollection(collectionKey);
-
-  if (!collection || !tours.length) {
-    await sendWhatsAppText(to, "No encontré tours para esa colección ahora mismo 🙏");
+async function sendVisualCollectionList(to, collectionKey) {
+  const collection = getVisualCollectionByKey(collectionKey);
+  if (!collection) {
+    await sendWhatsAppText(to, "No encontré esa colección ahora mismo 🙏");
     return;
   }
 
-  const rows = tours.map((t) => ({
+  const rows = collection.tours.map((t) => ({
     id: t.id,
     title: waRowTitle(t.title),
-    description: tourListDescription(t),
+    description: "",
   }));
 
-  const sections = buildRowsSections(rows, collection.title);
-  const rendered =
-    `*${collection.title}*\nElige un tour para ver su flyer y más detalles 👇\n\n` +
-    rows.map((r) => `• [${r.id}] ${r.title} — ${r.description}`).join("\n");
+  const rendered = buildVisualCollectionText(collectionKey);
 
-  await sendInteractiveList(to, {
-    headerText: collection.title,
-    bodyText: "Elige un tour para ver su flyer y más detalles 👇",
-    buttonText: "Ver tours",
-    sections,
-    renderedBody: rendered,
-    meta: { rows, collection: collectionKey },
-  });
+  if (rows.length <= 10) {
+    await sendInteractiveListOrFallback(to, {
+      headerText: collection.title,
+      bodyText: "Selecciona un tour del catálogo visual 👇",
+      buttonText: "Ver tours",
+      sectionTitle: waRowTitle(collection.title),
+      rows,
+      renderedText: rendered,
+      reportMeta: { rows, collection: collectionKey },
+    });
+    return;
+  }
+
+  await sendWhatsAppText(to, rendered);
 }
 
 async function sendCatalogDocument(to) {
@@ -2438,23 +2599,37 @@ function buildCandidateDeparturesForTour({ tour, fromISO, toISO }) {
 
   while (curUTC <= endUTC) {
     const curLocal = getZonedParts(curUTC, BUSINESS_TIMEZONE);
-    const js = new Date(Date.UTC(curLocal.year, curLocal.month - 1, curLocal.day, 12, 0, 0));
+    const js = new Date(
+      Date.UTC(curLocal.year, curLocal.month - 1, curLocal.day, 12, 0, 0)
+    );
     const isoWeekday = ((js.getUTCDay() + 6) % 7) + 1;
     const weekdayKey = weekdayKeyFromISOWeekday(isoWeekday);
 
     const allowedMonths = Array.isArray(tour.activeMonths) ? tour.activeMonths : null;
     if (!allowedMonths || allowedMonths.includes(curLocal.month)) {
-      const dayTimes = Array.isArray(tour.schedule?.[weekdayKey]) ? tour.schedule[weekdayKey] : [];
+      const dayTimes = Array.isArray(tour.schedule?.[weekdayKey])
+        ? tour.schedule[weekdayKey]
+        : [];
 
       for (const hhmm of dayTimes) {
-        const [h, m] = String(hhmm).split(":").map((n) => parseInt(n, 10));
+        const [h, m] = String(hhmm)
+          .split(":")
+          .map((n) => parseInt(n, 10));
         if (!Number.isFinite(h) || !Number.isFinite(m)) continue;
 
         const startUTC = zonedTimeToUtc(
-          { year: curLocal.year, month: curLocal.month, day: curLocal.day, hour: h, minute: m },
+          {
+            year: curLocal.year,
+            month: curLocal.month,
+            day: curLocal.day,
+            hour: h,
+            minute: m,
+          },
           BUSINESS_TIMEZONE
         );
-        const endUTCSlot = new Date(startUTC.getTime() + Number(tour.durationMin || 0) * 60000);
+        const endUTCSlot = new Date(
+          startUTC.getTime() + Number(tour.durationMin || 0) * 60000
+        );
 
         if (startUTC >= from && endUTCSlot <= to) {
           departures.push({
@@ -2469,7 +2644,13 @@ function buildCandidateDeparturesForTour({ tour, fromISO, toISO }) {
     }
 
     const nextDayUTC = zonedTimeToUtc(
-      { year: curLocal.year, month: curLocal.month, day: curLocal.day, hour: 0, minute: 0 },
+      {
+        year: curLocal.year,
+        month: curLocal.month,
+        day: curLocal.day,
+        hour: 0,
+        minute: 0,
+      },
       BUSINESS_TIMEZONE
     );
     curUTC = new Date(nextDayUTC.getTime() + 24 * 60 * 60000);
@@ -2481,12 +2662,18 @@ function buildCandidateDeparturesForTour({ tour, fromISO, toISO }) {
 async function getAvailableSlotsTool({ tour_key, from, to }) {
   const tour = getTourByKey(tour_key);
   if (!tour) throw new Error("Tour inválido");
-  if (isCatalogOnlyTour(tour)) throw new Error("Este tour se gestiona por cotización manual");
+  if (!GOOGLE_CALENDAR_ID || !process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
+    throw new Error("Google Calendar no está configurado");
+  }
 
   const calendar = getCalendarClient();
   const events = await listReservationEvents(calendar, from, to);
   const reservedMap = countReservedSeatsByKey(events);
-  const candidates = buildCandidateDeparturesForTour({ tour, fromISO: from, toISO: to });
+  const candidates = buildCandidateDeparturesForTour({
+    tour,
+    fromISO: from,
+    toISO: to,
+  });
   const nowPlusLead = getNowPlusLeadUTC();
 
   const available = candidates
@@ -2505,7 +2692,6 @@ async function getAvailableSlotsTool({ tour_key, from, to }) {
 async function getRemainingSeatsForSlot({ tour_key, slot_start, slot_end }) {
   const tour = getTourByKey(tour_key);
   if (!tour) throw new Error("Tour inválido");
-  if (isCatalogOnlyTour(tour)) throw new Error("Este tour se gestiona por cotización manual");
 
   const calendar = getCalendarClient();
   const events = await listReservationEvents(calendar, slot_start, slot_end);
@@ -2532,13 +2718,16 @@ async function createReservationTool({
   const calendar = getCalendarClient();
   const tour = getTourByKey(tour_key);
   if (!tour) throw new Error("Tour inválido");
-  if (isCatalogOnlyTour(tour)) throw new Error("Este tour no usa reserva automática");
   if (!slot_start || !slot_end) throw new Error("Missing slot_start/slot_end");
 
   const passengersTotal = Number(adults || 0) + Number(children || 0);
   if (passengersTotal <= 0) throw new Error("Debe haber al menos 1 pasajero");
 
-  const remainingSeats = await getRemainingSeatsForSlot({ tour_key, slot_start, slot_end });
+  const remainingSeats = await getRemainingSeatsForSlot({
+    tour_key,
+    slot_start,
+    slot_end,
+  });
   if (passengersTotal > remainingSeats) {
     throw new Error(`Solo quedan ${remainingSeats} espacios para esa salida`);
   }
@@ -2615,15 +2804,21 @@ async function rescheduleReservationTool({
   const calendar = getCalendarClient();
   const tour = getTourByKey(tour_key);
   if (!tour) throw new Error("Tour inválido");
-  if (isCatalogOnlyTour(tour)) throw new Error("Este tour no usa reprogramación automática");
   if (!new_start || !new_end) throw new Error("Missing new_start/new_end");
 
   const passengersTotal = Number(adults || 0) + Number(children || 0);
-  const current = await calendar.events.get({ calendarId: GOOGLE_CALENDAR_ID, eventId: reservation_id });
+  const current = await calendar.events.get({
+    calendarId: GOOGLE_CALENDAR_ID,
+    eventId: reservation_id,
+  });
   const priv = current.data.extendedProperties?.private || {};
   const oldStart = current.data.start?.dateTime;
 
-  const remainingSeats = await getRemainingSeatsForSlot({ tour_key, slot_start: new_start, slot_end: new_end });
+  const remainingSeats = await getRemainingSeatsForSlot({
+    tour_key,
+    slot_start: new_start,
+    slot_end: new_end,
+  });
   const alreadyReservedOnSameSlot = oldStart === new_start ? passengersTotal : 0;
   if (passengersTotal > remainingSeats + alreadyReservedOnSameSlot) {
     throw new Error(`Solo quedan ${remainingSeats} espacios para esa salida`);
@@ -2649,7 +2844,9 @@ async function rescheduleReservationTool({
     calendarId: GOOGLE_CALENDAR_ID,
     eventId: reservation_id,
     requestBody: {
-      summary: `Reserva - ${tour.title} - ${passenger_name || priv.passenger_name || "Cliente"}`,
+      summary: `Reserva - ${tour.title} - ${
+        passenger_name || priv.passenger_name || "Cliente"
+      }`,
       location: BUSINESS_ADDRESS || tour.meetingPoint || undefined,
       start: { dateTime: new_start, timeZone: BUSINESS_TIMEZONE },
       end: { dateTime: new_end, timeZone: BUSINESS_TIMEZONE },
@@ -2662,7 +2859,10 @@ async function rescheduleReservationTool({
 
 async function cancelReservationTool({ reservation_id, reason }) {
   const calendar = getCalendarClient();
-  const event = await calendar.events.get({ calendarId: GOOGLE_CALENDAR_ID, eventId: reservation_id });
+  const event = await calendar.events.get({
+    calendarId: GOOGLE_CALENDAR_ID,
+    eventId: reservation_id,
+  });
   const summary = event.data.summary || "Reserva";
 
   await calendar.events.patch({
@@ -2672,7 +2872,10 @@ async function cancelReservationTool({ reservation_id, reason }) {
       summary: `CANCELADA - ${summary}`,
       description: (event.data.description || "") + `\n\nCancelación: ${reason || ""}`,
       extendedProperties: {
-        private: { ...(event.data.extendedProperties?.private || {}), status: "cancelled" },
+        private: {
+          ...(event.data.extendedProperties?.private || {}),
+          status: "cancelled",
+        },
       },
     },
   });
@@ -2715,7 +2918,9 @@ async function findUpcomingReservationByPhone(phone, windowDays = 180) {
         reservation_id: ev.id,
         start,
         end: endDT,
-        tour_key: String(priv.tour_key || "").trim() || inferTourFromSummary(ev.summary || ""),
+        tour_key:
+          String(priv.tour_key || "").trim() ||
+          inferTourFromSummary(ev.summary || ""),
         passenger_name: String(priv.passenger_name || "").trim() || "",
         phone: normalizePhoneDigits(priv.wa_phone || phone),
         adults: Number(priv.adults || 0),
@@ -2728,7 +2933,10 @@ async function findUpcomingReservationByPhone(phone, windowDays = 180) {
 
     return null;
   } catch (e) {
-    console.error("findUpcomingReservationByPhone error:", e?.response?.data || e?.message || e);
+    console.error(
+      "findUpcomingReservationByPhone error:",
+      e?.response?.data || e?.message || e
+    );
     return null;
   }
 }
@@ -2775,7 +2983,10 @@ const MONTHS = {
 
 function startOfLocalDayUTC(date, tz) {
   const p = getZonedParts(date, tz);
-  return zonedTimeToUtc({ year: p.year, month: p.month, day: p.day, hour: 0, minute: 0 }, tz);
+  return zonedTimeToUtc(
+    { year: p.year, month: p.month, day: p.day, hour: 0, minute: 0 },
+    tz
+  );
 }
 
 function addLocalDaysUTC(dateUTC, days, tz) {
@@ -2783,7 +2994,13 @@ function addLocalDaysUTC(dateUTC, days, tz) {
   const base = new Date(Date.UTC(p.year, p.month - 1, p.day, 12, 0, 0));
   base.setUTCDate(base.getUTCDate() + days);
   return zonedTimeToUtc(
-    { year: base.getUTCFullYear(), month: base.getUTCMonth() + 1, day: base.getUTCDate(), hour: 0, minute: 0 },
+    {
+      year: base.getUTCFullYear(),
+      month: base.getUTCMonth() + 1,
+      day: base.getUTCDate(),
+      hour: 0,
+      minute: 0,
+    },
     tz
   );
 }
@@ -2793,7 +3010,10 @@ function nextWeekdayFromTodayUTC(targetIsoDow, tz, isNext = false) {
   const todayLocal = startOfLocalDayUTC(now, tz);
 
   const p = getZonedParts(todayLocal, tz);
-  const mid = zonedTimeToUtc({ year: p.year, month: p.month, day: p.day, hour: 12, minute: 0 }, tz);
+  const mid = zonedTimeToUtc(
+    { year: p.year, month: p.month, day: p.day, hour: 12, minute: 0 },
+    tz
+  );
   const js = new Date(mid.toISOString());
   const isoToday = ((js.getUTCDay() + 6) % 7) + 1;
 
@@ -2805,7 +3025,10 @@ function nextWeekdayFromTodayUTC(targetIsoDow, tz, isNext = false) {
 }
 
 function rangeForWholeMonth(year, month) {
-  const from = zonedTimeToUtc({ year, month, day: 1, hour: 0, minute: 0 }, BUSINESS_TIMEZONE);
+  const from = zonedTimeToUtc(
+    { year, month, day: 1, hour: 0, minute: 0 },
+    BUSINESS_TIMEZONE
+  );
   const toMonth = month === 12 ? { year: year + 1, month: 1 } : { year, month: month + 1 };
   const to = zonedTimeToUtc(
     { year: toMonth.year, month: toMonth.month, day: 1, hour: 0, minute: 0 },
@@ -2823,18 +3046,34 @@ function parseDateRangeFromText(userText) {
     return { from: from.toISOString(), to: to.toISOString(), label: "hoy" };
   }
   if (t.includes("pasado manana") || t.includes("pasado mañana")) {
-    const from = addLocalDaysUTC(startOfLocalDayUTC(new Date(), BUSINESS_TIMEZONE), 2, BUSINESS_TIMEZONE);
+    const from = addLocalDaysUTC(
+      startOfLocalDayUTC(new Date(), BUSINESS_TIMEZONE),
+      2,
+      BUSINESS_TIMEZONE
+    );
     const to = addLocalDaysUTC(from, 1, BUSINESS_TIMEZONE);
     return { from: from.toISOString(), to: to.toISOString(), label: "pasado mañana" };
   }
   if (t.includes("manana") || t.includes("mañana")) {
-    const from = addLocalDaysUTC(startOfLocalDayUTC(new Date(), BUSINESS_TIMEZONE), 1, BUSINESS_TIMEZONE);
+    const from = addLocalDaysUTC(
+      startOfLocalDayUTC(new Date(), BUSINESS_TIMEZONE),
+      1,
+      BUSINESS_TIMEZONE
+    );
     const to = addLocalDaysUTC(from, 1, BUSINESS_TIMEZONE);
     return { from: from.toISOString(), to: to.toISOString(), label: "mañana" };
   }
 
-  if (t.includes("semana que viene") || t.includes("la semana que viene") || t.includes("siguiente semana")) {
-    const from = addLocalDaysUTC(startOfLocalDayUTC(new Date(), BUSINESS_TIMEZONE), 1, BUSINESS_TIMEZONE);
+  if (
+    t.includes("semana que viene") ||
+    t.includes("la semana que viene") ||
+    t.includes("siguiente semana")
+  ) {
+    const from = addLocalDaysUTC(
+      startOfLocalDayUTC(new Date(), BUSINESS_TIMEZONE),
+      1,
+      BUSINESS_TIMEZONE
+    );
     const to = addLocalDaysUTC(from, 7, BUSINESS_TIMEZONE);
     return { from: from.toISOString(), to: to.toISOString(), label: "la semana que viene" };
   }
@@ -2852,7 +3091,10 @@ function parseDateRangeFromText(userText) {
   for (const [name, iso] of Object.entries(DOW)) {
     if (t.includes(name)) {
       const isNext =
-        t.includes("proximo") || t.includes("próximo") || t.includes("que viene") || t.includes("siguiente");
+        t.includes("proximo") ||
+        t.includes("próximo") ||
+        t.includes("que viene") ||
+        t.includes("siguiente");
       const fromDay = nextWeekdayFromTodayUTC(iso, BUSINESS_TIMEZONE, isNext);
       const toDay = addLocalDaysUTC(fromDay, 1, BUSINESS_TIMEZONE);
       return { from: fromDay.toISOString(), to: toDay.toISOString(), label: name };
@@ -2870,13 +3112,23 @@ function parseDateRangeFromText(userText) {
       let year = m1[4] ? parseInt(m1[4], 10) : nowP.year;
 
       if (!m1[4]) {
-        const candidateUTC = zonedTimeToUtc({ year, month, day, hour: 0, minute: 0 }, BUSINESS_TIMEZONE);
+        const candidateUTC = zonedTimeToUtc(
+          { year, month, day, hour: 0, minute: 0 },
+          BUSINESS_TIMEZONE
+        );
         if (candidateUTC < startOfLocalDayUTC(now, BUSINESS_TIMEZONE)) year += 1;
       }
 
-      const from = zonedTimeToUtc({ year, month, day, hour: 0, minute: 0 }, BUSINESS_TIMEZONE);
+      const from = zonedTimeToUtc(
+        { year, month, day, hour: 0, minute: 0 },
+        BUSINESS_TIMEZONE
+      );
       const to = addLocalDaysUTC(from, 1, BUSINESS_TIMEZONE);
-      return { from: from.toISOString(), to: to.toISOString(), label: `${day} de ${monthName}` };
+      return {
+        from: from.toISOString(),
+        to: to.toISOString(),
+        label: `${day} de ${monthName}`,
+      };
     }
   }
 
@@ -2998,15 +3250,15 @@ Servicios:
 - Paquetes vacacionales
 
 Reglas:
-- Para tours con reserva automática, no inventes disponibilidad. Solo ofrece salidas reales usando get_available_departures.
-- Para tours con reserva automática, si van a reservar, necesitas: tour, fecha, cantidad de adultos, cantidad de niños, punto de salida, ciudad, nombre y teléfono.
-- Para tours tipo catálogo, boletos aéreos, hoteles, seguros, traslados y paquetes vacacionales NO inventes precios. Debes pedir datos básicos y explicar que un agente confirmará.
+- Para tours estructurados, no inventes disponibilidad. Solo ofrece salidas reales usando get_available_departures.
+- Para tours visuales de catálogo (Punta Cana, Marzo, Semana Santa), no inventes disponibilidad automática. Debes captar la solicitud y explicar que un asesor confirmará.
+- Para boletos aéreos, hoteles, seguros, traslados y paquetes vacacionales NO inventes precios.
 - Responde corto, claro y orientado a convertir.
 - Fecha actual (zona ${BUSINESS_TIMEZONE}): ${todayStr}.
 - No ofrezcas salidas que inicien en menos de ${MIN_BOOKING_LEAD_MIN} minutos desde ahora.
 
-Tours disponibles:
-${TOURS.map((t) => `- ${t.title} (${t.bookingMode})`).join("\n")}
+Tours estructurados:
+${TOURS.map((t) => `- ${t.title} (${t.category})`).join("\n")}
 
 ${extraSystem}
 Tel usuario: ${userPhone}.
@@ -3144,33 +3396,62 @@ Tel usuario: ${userPhone}.
 
       if (name === "get_available_departures") {
         const slots = await getAvailableSlotsTool(args);
-        toolResults.push({ tool_call_id: tc.id, role: "tool", name, content: JSON.stringify({ slots }) });
+        toolResults.push({
+          tool_call_id: tc.id,
+          role: "tool",
+          name,
+          content: JSON.stringify({ slots }),
+        });
       }
 
       if (name === "create_reservation") {
         const booked = await createReservationTool(args);
-        toolResults.push({ tool_call_id: tc.id, role: "tool", name, content: JSON.stringify({ booked }) });
+        toolResults.push({
+          tool_call_id: tc.id,
+          role: "tool",
+          name,
+          content: JSON.stringify({ booked }),
+        });
       }
 
       if (name === "reschedule_reservation") {
         const out = await rescheduleReservationTool(args);
-        toolResults.push({ tool_call_id: tc.id, role: "tool", name, content: JSON.stringify(out) });
+        toolResults.push({
+          tool_call_id: tc.id,
+          role: "tool",
+          name,
+          content: JSON.stringify(out),
+        });
       }
 
       if (name === "cancel_reservation") {
         const out = await cancelReservationTool(args);
-        toolResults.push({ tool_call_id: tc.id, role: "tool", name, content: JSON.stringify(out) });
+        toolResults.push({
+          tool_call_id: tc.id,
+          role: "tool",
+          name,
+          content: JSON.stringify(out),
+        });
       }
 
       if (name === "handoff_to_human") {
         const out = await handoffToHumanTool(args);
-        toolResults.push({ tool_call_id: tc.id, role: "tool", name, content: JSON.stringify(out) });
+        toolResults.push({
+          tool_call_id: tc.id,
+          role: "tool",
+          name,
+          content: JSON.stringify(out),
+        });
       }
     }
 
     const resp2 = await axios.post(
       "https://api.openai.com/v1/chat/completions",
-      { model: "gpt-4.1-mini", messages: [...messages, msg, ...toolResults], temperature: 0.2 },
+      {
+        model: "gpt-4.1-mini",
+        messages: [...messages, msg, ...toolResults],
+        temperature: 0.2,
+      },
       { headers: { Authorization: `Bearer ${OPENAI_API_KEY}` } }
     );
 
@@ -3179,7 +3460,9 @@ Tel usuario: ${userPhone}.
     return finalText || "¿Qué servicio te interesa? También puedo mostrarte el menú.";
   }
 
-  const text = msg?.content?.trim() || "Hola 👋 ¿Qué servicio te interesa? También puedo mostrarte el menú.";
+  const text =
+    msg?.content?.trim() ||
+    "Hola 👋 ¿Qué servicio te interesa? También puedo mostrarte el menú.";
   session.messages.push({ role: "assistant", content: text });
   return text;
 }
@@ -3191,7 +3474,9 @@ app.get("/webhook", (req, res) => {
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
   const challenge = req.query["hub.challenge"];
-  if (mode === "subscribe" && token === VERIFY_TOKEN) return res.status(200).send(challenge);
+  if (mode === "subscribe" && token === VERIFY_TOKEN) {
+    return res.status(200).send(challenge);
+  }
   return res.sendStatus(403);
 });
 
@@ -3214,7 +3499,11 @@ function extractIncomingText(msg) {
     return pr?.product_retailer_id || pr?.title || "";
   }
 
-  if (msg?.type === "order" && Array.isArray(msg?.order?.product_items) && msg.order.product_items.length) {
+  if (
+    msg?.type === "order" &&
+    Array.isArray(msg?.order?.product_items) &&
+    msg.order.product_items.length
+  ) {
     const first = msg.order.product_items[0];
     return first?.product_retailer_id || first?.name || first?.title || "";
   }
@@ -3229,7 +3518,9 @@ function extractIncomingText(msg) {
   if (msg?.type === "document" && msg?.document?.id) return "[DOCUMENT]";
   if (msg?.type === "sticker" && msg?.sticker?.id) return "[STICKER]";
   if (msg?.type === "contacts" && msg?.contacts?.length) return "[CONTACTS]";
-  if (msg?.type === "reaction" && msg?.reaction) return `[REACTION] ${msg.reaction.emoji || ""}`.trim();
+  if (msg?.type === "reaction" && msg?.reaction) {
+    return `[REACTION] ${msg.reaction.emoji || ""}`.trim();
+  }
 
   return `[${(msg?.type || "UNKNOWN").toUpperCase()}]`;
 }
@@ -3252,8 +3543,12 @@ app.post("/agent_message", async (req, res) => {
     }
 
     const { waTo, text } = req.body || {};
-    if (!waTo || !String(waTo).trim()) return res.status(400).json({ error: "waTo is required" });
-    if (!text || !String(text).trim()) return res.status(400).json({ error: "text is required" });
+    if (!waTo || !String(waTo).trim()) {
+      return res.status(400).json({ error: "waTo is required" });
+    }
+    if (!text || !String(text).trim()) {
+      return res.status(400).json({ error: "text is required" });
+    }
 
     await sendWhatsAppText(String(waTo), String(text), "AGENT");
     return res.json({ ok: true });
@@ -3273,7 +3568,9 @@ app.get("/hub_media/:mediaId", async (req, res) => {
     if (!verifyHubMediaToken(mediaId, ts, sig)) {
       return res.status(401).json({ error: "Invalid or expired media signature" });
     }
-    if (!WA_TOKEN) return res.status(500).json({ error: "WA_TOKEN not configured in bot" });
+    if (!WA_TOKEN) {
+      return res.status(500).json({ error: "WA_TOKEN not configured in bot" });
+    }
 
     const info = await getMetaMediaInfo(mediaId);
     const mimeType = String(info?.mime_type || "application/octet-stream");
@@ -3286,7 +3583,10 @@ app.get("/hub_media/:mediaId", async (req, res) => {
 
     res.setHeader("Content-Type", downloaded.mimeType || mimeType);
     res.setHeader("Cache-Control", "private, max-age=300");
-    res.setHeader("Content-Disposition", `inline; filename="${String(filename).replace(/"/g, "")}"`);
+    res.setHeader(
+      "Content-Disposition",
+      `inline; filename="${String(filename).replace(/"/g, "")}"`
+    );
     return res.status(200).send(downloaded.buffer);
   } catch (e) {
     console.error("hub_media error:", e?.response?.data || e?.message || e);
@@ -3321,7 +3621,11 @@ app.post("/webhook", async (req, res) => {
       incomingDisplayPhone,
     });
 
-    if (incomingPhoneNumberId && expectedPhoneNumberId && incomingPhoneNumberId !== expectedPhoneNumberId) {
+    if (
+      incomingPhoneNumberId &&
+      expectedPhoneNumberId &&
+      incomingPhoneNumberId !== expectedPhoneNumberId
+    ) {
       console.log("[WEBHOOK FILTER] Ignorado por phone_number_id distinto");
       return res.sendStatus(200);
     }
@@ -3353,7 +3657,9 @@ app.post("/webhook", async (req, res) => {
       source: "WHATSAPP",
       waMessageId: msg?.id,
       name: value?.contacts?.[0]?.profile?.name,
-      kind: inboundMetaWithMediaUrl?.kind || (msg?.type ? String(msg.type).toUpperCase() : "UNKNOWN"),
+      kind:
+        inboundMetaWithMediaUrl?.kind ||
+        (msg?.type ? String(msg.type).toUpperCase() : "UNKNOWN"),
       meta: inboundMetaWithMediaUrl,
       mediaUrl: inboundMetaWithMediaUrl?.mediaUrl || undefined,
     });
@@ -3375,7 +3681,8 @@ app.post("/webhook", async (req, res) => {
     const detectedCategoryEarly = detectCategoryKeyFromUser(userText);
     const detectedTourEarly = detectTourKeyFromUser(userText);
     const detectedRangeEarly = parseDateRangeFromText(userText);
-    const detectedCollectionEarly = detectTourCollectionFromUser(userText);
+    const detectedVisualCollectionEarly =
+      session.state === "idle" ? detectVisualCollectionKeyFromUser(userText) : null;
 
     const hasEarlyIntent =
       !!detectedServiceLineEarly ||
@@ -3383,7 +3690,7 @@ app.post("/webhook", async (req, res) => {
       !!detectedCategoryEarly ||
       !!detectedTourEarly ||
       !!detectedRangeEarly ||
-      !!detectedCollectionEarly ||
+      !!detectedVisualCollectionEarly ||
       tNorm.includes("tour") ||
       tNorm.includes("excursion") ||
       tNorm.includes("excursión") ||
@@ -3396,7 +3703,10 @@ app.post("/webhook", async (req, res) => {
       tNorm.includes("seguro") ||
       tNorm.includes("paquete") ||
       tNorm.includes("hotel") ||
-      tNorm.includes("traslado");
+      tNorm.includes("traslado") ||
+      tNorm.includes("semana santa") ||
+      tNorm.includes("marzo") ||
+      tNorm.includes("punta cana");
 
     if (session.greeted && session.state === "idle" && isGreeting(tNorm) && !hasEarlyIntent) {
       await sendWhatsAppText(from, quickHelpText());
@@ -3427,22 +3737,28 @@ app.post("/webhook", async (req, res) => {
       if (wantsConfirm) {
         await sendWhatsAppText(
           from,
-          `✅ ¡Reserva confirmada!\n\n🌴 Tour: ${tour?.title || booking.tour_key}\n📅 Fecha: ${formatDateInTZ(
+          `✅ ¡Reserva confirmada!\n\n🌴 Tour: ${
+            tour?.title || booking.tour_key
+          }\n📅 Fecha: ${formatDateInTZ(
             booking.start,
             BUSINESS_TIMEZONE
-          )}\n⏰ Hora: ${formatTimeInTZ(booking.start, BUSINESS_TIMEZONE)}\n\nResponde:\n2) Reprogramar\n3) Cancelar`
+          )}\n⏰ Hora: ${formatTimeInTZ(
+            booking.start,
+            BUSINESS_TIMEZONE
+          )}\n\nResponde:\n2) Reprogramar\n3) Cancelar`
         );
         return res.sendStatus(200);
       }
 
       if (wantsCancel) {
-        try {
-          await cancelReservationTool({ reservation_id: booking.reservation_id, reason: userText });
-          await sendWhatsAppText(from, `✅ Listo. Tu reserva fue cancelada.\n\nSi deseas una nueva, escribe *"Nueva reserva"* o vuelve al *menú*.`);
-        } catch (e) {
-          console.error("cancelReservationTool error:", e?.response?.data || e?.message || e);
-          await sendWhatsAppText(from, `No pude cancelar la reserva automáticamente 🙏 Ya pasé tu solicitud al equipo para revisión manual.`);
-        }
+        await cancelReservationTool({
+          reservation_id: booking.reservation_id,
+          reason: userText,
+        });
+        await sendWhatsAppText(
+          from,
+          `✅ Listo. Tu reserva fue cancelada.\n\nSi deseas una nueva, escribe *"Nueva reserva"* o vuelve al *menú*.`
+        );
 
         clearIntakeFlow(session);
         session.lastBooking = null;
@@ -3453,7 +3769,8 @@ app.post("/webhook", async (req, res) => {
       if (wantsReschedule) {
         session.reschedule.active = true;
         session.reschedule.reservation_id = booking.reservation_id;
-        session.reschedule.phone = booking.phone || String(from).replace(/[^\d]/g, "");
+        session.reschedule.phone =
+          booking.phone || String(from).replace(/[^\d]/g, "");
         session.reschedule.passenger_name = booking.passenger_name || "";
         session.reschedule.tour_key = booking.tour_key || "";
         session.reschedule.adults = Number(booking.adults || 0);
@@ -3472,7 +3789,9 @@ app.post("/webhook", async (req, res) => {
 
         await sendWhatsAppText(
           from,
-          `Perfecto ✅ Vamos a reprogramar tu reserva.\nTour: *${tour?.title || booking.tour_key}*\n\n¿Para qué día?\nEj: "mañana", "viernes", "próximo martes".`
+          `Perfecto ✅ Vamos a reprogramar tu reserva.\nTour: *${
+            tour?.title || booking.tour_key
+          }*\n\n¿Para qué día?\nEj: "mañana", "viernes", "próximo martes".`
         );
         return res.sendStatus(200);
       }
@@ -3490,10 +3809,15 @@ app.post("/webhook", async (req, res) => {
       if (isThanks(tNorm)) {
         await sendWhatsAppText(
           from,
-          `¡Perfecto! ✅\nTu reserva queda registrada.\n\n🌴 Tour: ${tour?.title || booking.tour_key}\n📅 Fecha: ${formatDateInTZ(
+          `¡Perfecto! ✅\nTu reserva queda registrada.\n\n🌴 Tour: ${
+            tour?.title || booking.tour_key
+          }\n📅 Fecha: ${formatDateInTZ(
             booking.start,
             BUSINESS_TIMEZONE
-          )}\n⏰ Hora: ${formatTimeInTZ(booking.start, BUSINESS_TIMEZONE)}\n\nSi necesitas *reprogramar* o *cancelar*, escríbelo aquí.`
+          )}\n⏰ Hora: ${formatTimeInTZ(
+            booking.start,
+            BUSINESS_TIMEZONE
+          )}\n\nSi necesitas *reprogramar* o *cancelar*, escríbelo aquí.`
         );
         return res.sendStatus(200);
       }
@@ -3506,7 +3830,167 @@ app.post("/webhook", async (req, res) => {
     }
 
     // =========================
-    // TOURS FLOW - ORIGEN
+    // FLUJO CATÁLOGO VISUAL
+    // =========================
+    if (session.state === "await_visual_tour_choice") {
+      if (
+        tNorm.includes("menu") ||
+        tNorm.includes("menú") ||
+        isBackCommand(tNorm)
+      ) {
+        clearIntakeFlow(session);
+        await sendWhatsAppText(from, mainMenuText());
+        await sendServiceLinesList(from);
+        return res.sendStatus(200);
+      }
+
+      const pickedVisual = tryPickVisualTourFromUserText(session, userText);
+      if (!pickedVisual) {
+        const collection = getVisualCollectionByKey(session.pendingVisualCollection);
+        await sendWhatsAppText(
+          from,
+          `No identifiqué el tour 🙏\n\nResponde con el *número* o con el *nombre exacto* del tour de *${
+            collection?.title || "la colección"
+          }*.`
+        );
+        return res.sendStatus(200);
+      }
+
+      session.pendingVisualTour = pickedVisual.key;
+      session.state = "await_visual_date";
+      updateLead(session, { tour_key: pickedVisual.key });
+
+      await sendWhatsAppImage(
+        from,
+        pickedVisual.imageUrl,
+        `🌴 ${pickedVisual.title}`
+      );
+      await sendWhatsAppText(from, buildVisualTourIntroText(pickedVisual));
+      return res.sendStatus(200);
+    }
+
+    if (session.state === "await_visual_date" && session.pendingVisualTour) {
+      if (isBackCommand(tNorm)) {
+        session.state = "await_visual_tour_choice";
+        await sendVisualCollectionList(from, session.pendingVisualCollection);
+        return res.sendStatus(200);
+      }
+
+      if (tNorm.length < 2) {
+        await sendWhatsAppText(
+          from,
+          `Dime la *fecha* o *temporada* que te interesa para ese tour.`
+        );
+        return res.sendStatus(200);
+      }
+
+      session.pendingTravelDateText = userText;
+      session.state = "await_visual_people";
+      await sendWhatsAppText(
+        from,
+        `Perfecto 👍\n¿Para cuántas *personas* sería?`
+      );
+      return res.sendStatus(200);
+    }
+
+    if (session.state === "await_visual_people" && session.pendingVisualTour) {
+      const pax = parsePassengerCount(userText);
+      if (pax === null || pax < 1) {
+        await sendWhatsAppText(
+          from,
+          `Indícame cuántas *personas* serían. Ej: 2`
+        );
+        return res.sendStatus(200);
+      }
+
+      session.pendingPassengers = pax;
+      session.state = "await_visual_pickup";
+      await sendWhatsAppText(
+        from,
+        `Gracias. Ahora dime tu *hotel*, *zona* o *punto de salida*.`
+      );
+      return res.sendStatus(200);
+    }
+
+    if (session.state === "await_visual_pickup" && session.pendingVisualTour) {
+      if (tNorm.length < 2) {
+        await sendWhatsAppText(
+          from,
+          `Por favor, indícame tu *hotel*, *zona* o *punto de salida*.`
+        );
+        return res.sendStatus(200);
+      }
+
+      session.pendingPickup = userText;
+      session.state = "await_visual_name";
+      await sendWhatsAppText(from, `Perfecto ✅\nAhora dime tu *nombre completo*.`);
+      return res.sendStatus(200);
+    }
+
+    if (session.state === "await_visual_name" && session.pendingVisualTour) {
+      if (tNorm.length < 3) {
+        await sendWhatsAppText(from, `Por favor, envíame tu *nombre completo* 🙂`);
+        return res.sendStatus(200);
+      }
+
+      session.pendingName = userText;
+      session.state = "await_visual_phone";
+      await sendWhatsAppText(
+        from,
+        `Gracias. Ahora envíame tu *número de teléfono* para que un asesor te contacte.`
+      );
+      return res.sendStatus(200);
+    }
+
+    if (session.state === "await_visual_phone" && session.pendingVisualTour) {
+      const phoneDigits = userText.replace(/[^\d]/g, "");
+      if (phoneDigits.length < 8) {
+        await sendWhatsAppText(
+          from,
+          `Ese número parece incompleto 🙏\nEnvíamelo así: 829XXXXXXX`
+        );
+        return res.sendStatus(200);
+      }
+
+      const visualTour = getVisualTourByKey(session.pendingVisualTour);
+
+      const summaryText = buildLeadSummary("Nueva solicitud de tour visual", [
+        { label: "🧩 Servicio", value: serviceLineLabel("tours_rd") },
+        { label: "🖼️ Colección", value: visualTour?.collectionTitle || "Catálogo visual" },
+        { label: "🌴 Tour", value: visualTour?.title || "—" },
+        { label: "📅 Fecha / temporada", value: session.pendingTravelDateText || "—" },
+        { label: "👥 Personas", value: session.pendingPassengers || "—" },
+        { label: "📍 Hotel / punto de salida", value: session.pendingPickup || "—" },
+        { label: "👤 Cliente", value: session.pendingName || "—" },
+        { label: "📞 Tel", value: phoneDigits || "—" },
+      ]);
+
+      updateLead(session, {
+        tour_key: session.pendingVisualTour,
+        quotePreview: summaryText,
+        converted: false,
+        followupSent: false,
+      });
+
+      await handoffToHumanTool({ summary: summaryText });
+      await notifyPersonalWhatsAppLeadSummary(summaryText, phoneDigits);
+
+      await sendWhatsAppText(
+        from,
+        `✅ *Solicitud recibida*\n\nRecibí tu interés por *${
+          visualTour?.title || "ese tour"
+        }* y un asesor te contactará para confirmar disponibilidad y detalles.\n\n` +
+          `• fecha: ${session.pendingTravelDateText || "—"}\n` +
+          `• personas: ${session.pendingPassengers || "—"}\n` +
+          `• hotel / salida: ${session.pendingPickup || "—"}`
+      );
+
+      clearIntakeFlow(session);
+      return res.sendStatus(200);
+    }
+
+    // =========================
+    // TOURS FLOW
     // =========================
     if (session.state === "await_tour_origin") {
       const originKey = detectOriginKeyFromUser(userText);
@@ -3524,95 +4008,20 @@ app.post("/webhook", async (req, res) => {
       updateLead(session, { tour_key: "" });
       session.state = "idle";
 
+      if (originKey === "punta_cana") {
+        session.pendingVisualCollection = "tours_punta_cana";
+        session.lastVisualOptions = (
+          getVisualCollectionByKey("tours_punta_cana")?.tours || []
+        ).map((t) => t.key);
+        session.state = "await_visual_tour_choice";
+        await sendVisualCollectionList(from, "tours_punta_cana");
+        return res.sendStatus(200);
+      }
+
       await sendToursListByOrigin(from, originKey);
       return res.sendStatus(200);
     }
 
-    // =========================
-    // TOURS FLOW - FECHA
-    // =========================
-    if (session.state === "await_day") {
-      const tour = getTourByKey(session.pendingTour);
-
-      if (!tour) {
-        clearIntakeFlow(session);
-        await sendWhatsAppText(from, `Necesito que primero elijas el tour para continuar 🙏`);
-        await sendWhatsAppText(from, mainMenuText());
-        await sendServiceLinesList(from);
-        return res.sendStatus(200);
-      }
-
-      if (isCatalogOnlyTour(tour)) {
-        if (tNorm.length < 2) {
-          await sendWhatsAppText(
-            from,
-            `Indícame la *fecha* o *temporada* que te interesa para *${tour.title}*.\nEj: "mañana", "sábado", "semana santa" o "en julio".`
-          );
-          return res.sendStatus(200);
-        }
-
-        session.pendingTravelDateText = userText;
-        session.state = "await_catalog_tour_people";
-        await sendWhatsAppText(from, `Perfecto 👍 ¿Para cuántas *personas* sería *${tour.title}*?`);
-        return res.sendStatus(200);
-      }
-
-      const range = parseDateRangeFromText(userText);
-      if (!range) {
-        await sendWhatsAppText(
-          from,
-          `Para elegir la fecha de *${tour.title}*, puedes escribir: "mañana", "viernes", "próximo martes", "14 de junio" o "en julio".`
-        );
-        return res.sendStatus(200);
-      }
-
-      try {
-        const slots = await getAvailableSlotsTool({
-          tour_key: session.pendingTour,
-          from: range.from,
-          to: range.to,
-        });
-
-        if (!slots.length) {
-          await sendWhatsAppText(
-            from,
-            `No veo salidas disponibles para ese rango 🙏\nDime otro día o mes y te comparto más opciones.`
-          );
-          return res.sendStatus(200);
-        }
-
-        session.pendingRange = range;
-        session.lastSlots = slots;
-        session.state = "await_slot_choice";
-
-        const listText = formatSlotsList(session.pendingTour, slots, session);
-        await sendWhatsAppText(from, listText);
-        return res.sendStatus(200);
-      } catch (e) {
-        console.error("await_day availability error:", e?.response?.data || e?.message || e);
-
-        const summaryText = buildLeadSummary("Solicitud de tour con revisión manual", [
-          { label: "🧩 Servicio", value: serviceLineLabel("tours_rd") },
-          { label: "🌴 Tour", value: tour.title || "—" },
-          { label: "📅 Fecha solicitada", value: userText || "—" },
-          { label: "📞 WhatsApp", value: from || "—" },
-        ]);
-
-        await handoffToHumanTool({ summary: summaryText });
-        await notifyPersonalWhatsAppLeadSummary(summaryText, from);
-
-        await sendWhatsAppText(
-          from,
-          `Ahora mismo no pude consultar la disponibilidad automática para *${tour.title}* 🙏\nYa pasé tu solicitud al equipo y te contactarán para confirmarte opciones.`
-        );
-        clearIntakeFlow(session);
-        return res.sendStatus(200);
-      }
-    }
-
-    // =========================
-    // TOURS FLOW - ELECCIÓN DE HORARIO
-    // =========================
     if (session.state === "await_slot_choice" && session.lastSlots?.length) {
       if (["reiniciar", "reset", "resetear", "empezar", "inicio"].some((k) => tNorm.includes(k))) {
         clearIntakeFlow(session);
@@ -3633,7 +4042,9 @@ app.post("/webhook", async (req, res) => {
         const tour = getTourByKey(session.pendingTour);
         await sendWhatsAppText(
           from,
-          `Perfecto ✅ Vamos a elegir *otro día* para *${tour?.title || session.pendingTour}*.\n\n¿Para qué día?\nEj: "mañana", "viernes", "próximo martes", "la semana que viene" o "14 de junio".`
+          `Perfecto ✅ Vamos a elegir *otro día* para *${
+            tour?.title || session.pendingTour
+          }*.\n\n¿Para qué día?\nEj: "mañana", "viernes", "próximo martes", "la semana que viene" o "14 de junio".`
         );
         return res.sendStatus(200);
       }
@@ -3641,57 +4052,59 @@ app.post("/webhook", async (req, res) => {
       const picked = tryPickSlotFromUserText(session, userText);
       if (!picked) {
         if (/^\d+$/.test(tNorm)) {
-          await sendWhatsAppText(from, `Ese número no corresponde a una salida disponible 🙏\nResponde con uno de los números que ves en la lista, o escribe una hora como "9:00 am".`);
+          await sendWhatsAppText(
+            from,
+            `Ese número no corresponde a una salida disponible 🙏\nResponde con uno de los números que ves en la lista, o escribe una hora como "9:00 am".`
+          );
           return res.sendStatus(200);
         }
 
         const parsed = parseUserTimeTo24h(userText);
         if (parsed) {
-          await sendWhatsAppText(from, `Entendí *${userText}* ✅\nPero ese horario no está disponible.\n\nResponde con el *número* o una *hora disponible*.`);
+          await sendWhatsAppText(
+            from,
+            `Entendí *${userText}* ✅\nPero ese horario no está disponible.\n\nResponde con el *número* o una *hora disponible*.`
+          );
           return res.sendStatus(200);
         }
 
-        await sendWhatsAppText(from, `No entendí la salida 🙏\nResponde con el *número* (1,2,3...) o la *hora* (ej: 9:00 am).`);
+        await sendWhatsAppText(
+          from,
+          `No entendí la salida 🙏\nResponde con el *número* (1,2,3...) o la *hora* (ej: 9:00 am).`
+        );
         return res.sendStatus(200);
       }
 
       session.selectedSlot = picked;
 
       if (session.reschedule?.active && session.reschedule.reservation_id) {
-        try {
-          await rescheduleReservationTool({
-            reservation_id: session.reschedule.reservation_id,
-            new_slot_id: picked.slot_id,
-            new_start: picked.start,
-            new_end: picked.end,
-            tour_key: session.pendingTour || session.reschedule.tour_key,
-            passenger_name: session.reschedule.passenger_name,
-            phone: session.reschedule.phone || from,
-            adults: session.reschedule.adults,
-            children: session.reschedule.children,
-            city: session.reschedule.city,
-            pickup: session.reschedule.pickup,
-            wa_id: from,
-          });
-        } catch (e) {
-          console.error("rescheduleReservationTool error:", e?.response?.data || e?.message || e);
-          await sendWhatsAppText(
-            from,
-            `No pude reprogramar automáticamente esa reserva 🙏\nYa pasé tu solicitud al equipo para revisión manual.`
-          );
-          clearIntakeFlow(session);
-          session.lastBooking = null;
-          session.reschedule = defaultSession().reschedule;
-          return res.sendStatus(200);
-        }
+        await rescheduleReservationTool({
+          reservation_id: session.reschedule.reservation_id,
+          new_slot_id: picked.slot_id,
+          new_start: picked.start,
+          new_end: picked.end,
+          tour_key: session.pendingTour || session.reschedule.tour_key,
+          passenger_name: session.reschedule.passenger_name,
+          phone: session.reschedule.phone || from,
+          adults: session.reschedule.adults,
+          children: session.reschedule.children,
+          city: session.reschedule.city,
+          pickup: session.reschedule.pickup,
+          wa_id: from,
+        });
 
         session.lastBooking = {
           reservation_id: session.reschedule.reservation_id,
           start: picked.start,
           end: picked.end,
           tour_key: session.pendingTour || session.reschedule.tour_key,
-          passenger_name: session.reschedule.passenger_name || session.lastBooking?.passenger_name || "",
-          phone: session.reschedule.phone || String(from).replace(/[^\d]/g, ""),
+          passenger_name:
+            session.reschedule.passenger_name ||
+            session.lastBooking?.passenger_name ||
+            "",
+          phone:
+            session.reschedule.phone ||
+            String(from).replace(/[^\d]/g, ""),
           adults: session.reschedule.adults,
           children: session.reschedule.children,
           city: session.reschedule.city,
@@ -3710,10 +4123,15 @@ app.post("/webhook", async (req, res) => {
 
         await sendWhatsAppText(
           from,
-          `✅ *Reserva reprogramada*\n\n🌴 Tour: *${tour?.title || session.lastBooking.tour_key}*\n📅 Fecha: *${formatDateInTZ(
+          `✅ *Reserva reprogramada*\n\n🌴 Tour: *${
+            tour?.title || session.lastBooking.tour_key
+          }*\n📅 Fecha: *${formatDateInTZ(
             picked.start,
             BUSINESS_TIMEZONE
-          )}*\n⏰ Hora: *${formatTimeInTZ(picked.start, BUSINESS_TIMEZONE)}*\n\nResponde:\n1) Confirmar\n2) Reprogramar\n3) Cancelar`
+          )}*\n⏰ Hora: *${formatTimeInTZ(
+            picked.start,
+            BUSINESS_TIMEZONE
+          )}*\n\nResponde:\n1) Confirmar\n2) Reprogramar\n3) Cancelar`
         );
         return res.sendStatus(200);
       }
@@ -3721,7 +4139,10 @@ app.post("/webhook", async (req, res) => {
       session.state = "await_adults";
       await sendWhatsAppText(
         from,
-        `Perfecto ✅ Queda seleccionada la salida de las ${formatTimeInTZ(picked.start, BUSINESS_TIMEZONE)}.\n\n¿Cuántos *adultos* viajan?`
+        `Perfecto ✅ Queda seleccionada la salida de las ${formatTimeInTZ(
+          picked.start,
+          BUSINESS_TIMEZONE
+        )}.\n\n¿Cuántos *adultos* viajan?`
       );
       return res.sendStatus(200);
     }
@@ -3729,27 +4150,39 @@ app.post("/webhook", async (req, res) => {
     if (session.state === "await_adults" && session.selectedSlot) {
       const count = parsePassengerCount(userText);
       if (count === null || count < 1) {
-        await sendWhatsAppText(from, `Por favor, indícame cuántos *adultos* viajan. Ej: 2`);
+        await sendWhatsAppText(
+          from,
+          `Por favor, indícame cuántos *adultos* viajan. Ej: 2`
+        );
         return res.sendStatus(200);
       }
 
       session.pendingAdults = count;
       session.state = "await_children";
-      await sendWhatsAppText(from, `Perfecto 👍\nAhora dime cuántos *niños* viajan. Si no van niños, responde *0*.`);
+      await sendWhatsAppText(
+        from,
+        `Perfecto 👍\nAhora dime cuántos *niños* viajan. Si no van niños, responde *0*.`
+      );
       return res.sendStatus(200);
     }
 
     if (session.state === "await_children" && session.selectedSlot) {
       const count = parsePassengerCount(userText);
       if (count === null || count < 0) {
-        await sendWhatsAppText(from, `Indícame cuántos *niños* viajan. Si no van niños, responde *0*.`);
+        await sendWhatsAppText(
+          from,
+          `Indícame cuántos *niños* viajan. Si no van niños, responde *0*.`
+        );
         return res.sendStatus(200);
       }
 
       const total = Number(session.pendingAdults || 0) + Number(count || 0);
       const remainingSeats = Number(session.selectedSlot.remainingSeats || 0);
       if (total <= 0) {
-        await sendWhatsAppText(from, `Debe viajar al menos *1 persona* para continuar.`);
+        await sendWhatsAppText(
+          from,
+          `Debe viajar al menos *1 persona* para continuar.`
+        );
         return res.sendStatus(200);
       }
       if (total > remainingSeats) {
@@ -3765,17 +4198,30 @@ app.post("/webhook", async (req, res) => {
 
       session.pendingChildren = count;
       const tour = getTourByKey(session.pendingTour);
-      const quoteText = buildQuotePreview(tour, session.pendingAdults, session.pendingChildren);
-      updateLead(session, { tour_key: session.pendingTour, quotePreview: quoteText });
+      const quoteText = buildQuotePreview(
+        tour,
+        session.pendingAdults,
+        session.pendingChildren
+      );
+      updateLead(session, {
+        tour_key: session.pendingTour,
+        quotePreview: quoteText,
+      });
 
       session.state = "await_pickup";
-      await sendWhatsAppText(from, `${quoteText}\n\nAhora dime tu *punto de salida o pickup*. Ej: zona hotelera, aeropuerto, punto de encuentro.`);
+      await sendWhatsAppText(
+        from,
+        `${quoteText}\n\nAhora dime tu *punto de salida o pickup*. Ej: zona hotelera, aeropuerto, punto de encuentro.`
+      );
       return res.sendStatus(200);
     }
 
     if (session.state === "await_pickup" && session.selectedSlot) {
       if (tNorm.length < 2) {
-        await sendWhatsAppText(from, `Por favor, indícame tu *punto de salida o pickup*.`);
+        await sendWhatsAppText(
+          from,
+          `Por favor, indícame tu *punto de salida o pickup*.`
+        );
         return res.sendStatus(200);
       }
 
@@ -3793,7 +4239,10 @@ app.post("/webhook", async (req, res) => {
 
       session.pendingCity = userText;
       session.state = "await_name";
-      await sendWhatsAppText(from, `Perfecto ✅\nAhora indícame tu *nombre completo* para dejar la reserva casi lista.`);
+      await sendWhatsAppText(
+        from,
+        `Perfecto ✅\nAhora indícame tu *nombre completo* para dejar la reserva casi lista.`
+      );
       return res.sendStatus(200);
     }
 
@@ -3804,69 +4253,67 @@ app.post("/webhook", async (req, res) => {
       }
       session.pendingName = userText;
       session.state = "await_phone";
-      await sendWhatsAppText(from, `Gracias. Ahora envíame tu *número de teléfono* (ej: 829XXXXXXX) para completar la reserva.`);
+      await sendWhatsAppText(
+        from,
+        `Gracias. Ahora envíame tu *número de teléfono* (ej: 829XXXXXXX) para completar la reserva.`
+      );
       return res.sendStatus(200);
     }
 
     if (session.state === "await_phone" && session.selectedSlot && session.pendingName) {
       const phoneDigits = userText.replace(/[^\d]/g, "");
       if (phoneDigits.length < 8) {
-        await sendWhatsAppText(from, `Ese número parece incompleto 🙏\nEnvíame el teléfono así: 829XXXXXXX`);
+        await sendWhatsAppText(
+          from,
+          `Ese número parece incompleto 🙏\nEnvíame el teléfono así: 829XXXXXXX`
+        );
         return res.sendStatus(200);
       }
 
       const tour = getTourByKey(session.pendingTour);
       const quoteTotal =
-        Number(session.pendingAdults || 0) * Number(tour?.basePriceAdult || 0) +
-        Number(session.pendingChildren || 0) * Number(tour?.basePriceChild || 0);
+        Number(session.pendingAdults || 0) *
+          Number(tour?.basePriceAdult || 0) +
+        Number(session.pendingChildren || 0) *
+          Number(tour?.basePriceChild || 0);
 
-      let booked;
-      try {
-        booked = await createReservationTool({
-          passenger_name: session.pendingName,
-          phone: phoneDigits,
-          slot_id: session.selectedSlot.slot_id,
-          tour_key: session.pendingTour || session.selectedSlot.tour_key,
-          adults: session.pendingAdults || 0,
-          children: session.pendingChildren || 0,
-          city: session.pendingCity || "",
-          pickup: session.pendingPickup || "",
-          notes: "",
-          slot_start: session.selectedSlot.start,
-          slot_end: session.selectedSlot.end,
-          quote_total: quoteTotal,
-          wa_id: from,
-        });
-      } catch (e) {
-        console.error("createReservationTool error:", e?.response?.data || e?.message || e);
-
-        const summaryText = buildLeadSummary("Nueva solicitud de tour con revisión manual", [
-          { label: "🧩 Servicio", value: serviceLineLabel("tours_rd") },
-          { label: "🌴 Tour", value: tour?.title || "—" },
-          { label: "📅 Fecha", value: session.selectedSlot?.start ? formatDateInTZ(session.selectedSlot.start, BUSINESS_TIMEZONE) : "—" },
-          { label: "⏰ Hora", value: session.selectedSlot?.start ? formatTimeInTZ(session.selectedSlot.start, BUSINESS_TIMEZONE) : "—" },
-          { label: "👥 Pasajeros", value: `${Number(session.pendingAdults || 0) + Number(session.pendingChildren || 0)}` },
-          { label: "👤 Cliente", value: session.pendingName || "—" },
-          { label: "📞 Tel", value: phoneDigits || "—" },
-          { label: "📍 Ciudad", value: session.pendingCity || "—" },
-          { label: "🚐 Pickup", value: session.pendingPickup || "—" },
-        ]);
-
-        await handoffToHumanTool({ summary: summaryText });
-        await notifyPersonalWhatsAppLeadSummary(summaryText, phoneDigits);
-
-        await sendWhatsAppText(
-          from,
-          `No pude registrar la reserva automáticamente 🙏\nYa pasé tu solicitud al equipo para que la confirmen manualmente.`
-        );
-
-        clearIntakeFlow(session);
-        return res.sendStatus(200);
-      }
+      const booked = await createReservationTool({
+        passenger_name: session.pendingName,
+        phone: phoneDigits,
+        slot_id: session.selectedSlot.slot_id,
+        tour_key: session.pendingTour || session.selectedSlot.tour_key,
+        adults: session.pendingAdults || 0,
+        children: session.pendingChildren || 0,
+        city: session.pendingCity || "",
+        pickup: session.pendingPickup || "",
+        notes: "",
+        slot_start: session.selectedSlot.start,
+        slot_end: session.selectedSlot.end,
+        quote_total: quoteTotal,
+        wa_id: from,
+      });
 
       await sendWhatsAppText(
         from,
-        `✅ *Reserva registrada*\n\n🌴 Tour: *${tour?.title || booked.tour_key}*\n👤 Cliente: *${booked.passenger_name}*\n📞 Teléfono: *${phoneDigits}*\n👥 Pasajeros: *${Number(booked.adults || 0) + Number(booked.children || 0)}* (${booked.adults || 0} adultos / ${booked.children || 0} niños)\n📍 Ciudad: ${booked.city || "—"}\n🚐 Salida: ${booked.pickup || "—"}\n📅 Fecha: *${formatDateInTZ(booked.start, BUSINESS_TIMEZONE)}*\n⏰ Hora: *${formatTimeInTZ(booked.start, BUSINESS_TIMEZONE)}*\n💵 Total estimado: *${currency(booked.quote_total || 0)}*\n📌 Pago: ${tour?.paymentPolicy || "El equipo confirmará los detalles de pago."}\n\nResponde:\n1) Confirmar\n2) Reprogramar\n3) Cancelar`
+        `✅ *Reserva registrada*\n\n🌴 Tour: *${
+          tour?.title || booked.tour_key
+        }*\n👤 Cliente: *${booked.passenger_name}*\n📞 Teléfono: *${phoneDigits}*\n👥 Pasajeros: *${
+          Number(booked.adults || 0) + Number(booked.children || 0)
+        }* (${booked.adults || 0} adultos / ${
+          booked.children || 0
+        } niños)\n📍 Ciudad: ${booked.city || "—"}\n🚐 Salida: ${
+          booked.pickup || "—"
+        }\n📅 Fecha: *${formatDateInTZ(
+          booked.start,
+          BUSINESS_TIMEZONE
+        )}*\n⏰ Hora: *${formatTimeInTZ(
+          booked.start,
+          BUSINESS_TIMEZONE
+        )}*\n💵 Total estimado: *${currency(
+          booked.quote_total || 0
+        )}*\n📌 Pago: ${
+          tour?.paymentPolicy || "El equipo confirmará los detalles de pago."
+        }\n\nResponde:\n1) Confirmar\n2) Reprogramar\n3) Cancelar`
       );
 
       if (PERSONAL_WA_TO) {
@@ -3878,11 +4325,21 @@ app.post("/webhook", async (req, res) => {
             `🌴 Tour: *${tour?.title || booked.tour_key}*\n` +
             `👤 Cliente: *${booked.passenger_name}*\n` +
             `📞 Tel: *${passengerPhone || "—"}*\n` +
-            `👥 Pax: *${Number(booked.adults || 0) + Number(booked.children || 0)}* (${booked.adults || 0} adultos / ${booked.children || 0} niños)\n` +
+            `👥 Pax: *${
+              Number(booked.adults || 0) + Number(booked.children || 0)
+            }* (${booked.adults || 0} adultos / ${
+              booked.children || 0
+            } niños)\n` +
             `📍 Ciudad: ${booked.city || "—"}\n` +
             `🚐 Salida: ${booked.pickup || "—"}\n` +
-            `📅 Fecha: *${formatDateInTZ(booked.start, BUSINESS_TIMEZONE)}*\n` +
-            `⏰ Hora: *${formatTimeInTZ(booked.start, BUSINESS_TIMEZONE)}*\n` +
+            `📅 Fecha: *${formatDateInTZ(
+              booked.start,
+              BUSINESS_TIMEZONE
+            )}*\n` +
+            `⏰ Hora: *${formatTimeInTZ(
+              booked.start,
+              BUSINESS_TIMEZONE
+            )}*\n` +
             `💵 Estimado: *${currency(booked.quote_total || 0)}*\n` +
             `🆔 ID: ${booked.reservation_id || "—"}`;
           await notifyPersonalWhatsAppLeadSummary(summary, passengerPhone);
@@ -3907,81 +4364,23 @@ app.post("/webhook", async (req, res) => {
     }
 
     // =========================
-    // CATALOG-ONLY TOUR FLOW
-    // =========================
-    if (session.state === "await_catalog_tour_people") {
-      const pax = parsePassengerCount(userText);
-      if (pax === null || pax < 1) {
-        await sendWhatsAppText(from, `Indícame cuántas *personas* irían. Ej: 2`);
-        return res.sendStatus(200);
-      }
-
-      session.pendingPassengers = pax;
-      session.state = "await_catalog_tour_name";
-      await sendWhatsAppText(from, `Perfecto 👍 Ahora dime tu *nombre completo*.`);
-      return res.sendStatus(200);
-    }
-
-    if (session.state === "await_catalog_tour_name") {
-      if (tNorm.length < 3) {
-        await sendWhatsAppText(from, `Por favor, envíame tu *nombre completo* 🙂`);
-        return res.sendStatus(200);
-      }
-
-      session.pendingName = userText;
-      session.state = "await_catalog_tour_phone";
-      await sendWhatsAppText(from, `Gracias. Ahora envíame tu *número de teléfono* para pasarte con un asesor.`);
-      return res.sendStatus(200);
-    }
-
-    if (session.state === "await_catalog_tour_phone") {
-      const phoneDigits = userText.replace(/[^\d]/g, "");
-      if (phoneDigits.length < 8) {
-        await sendWhatsAppText(from, `Ese número parece incompleto 🙏\nEnvíamelo así: 829XXXXXXX`);
-        return res.sendStatus(200);
-      }
-
-      const tour = getTourByKey(session.pendingTour);
-      const summaryText = buildLeadSummary("Nueva solicitud de tour (catálogo visual)", [
-        { label: "🧩 Servicio", value: serviceLineLabel("tours_rd") },
-        { label: "🌴 Tour", value: tour?.title || "—" },
-        { label: "📅 Fecha / temporada", value: session.pendingTravelDateText || "—" },
-        { label: "👥 Personas", value: session.pendingPassengers || "—" },
-        { label: "👤 Cliente", value: session.pendingName || "—" },
-        { label: "📞 Tel", value: phoneDigits || "—" },
-      ]);
-
-      updateLead(session, {
-        tour_key: session.pendingTour || "",
-        quotePreview: summaryText,
-        converted: false,
-        followupSent: false,
-      });
-
-      await handoffToHumanTool({ summary: summaryText });
-      await notifyPersonalWhatsAppLeadSummary(summaryText, phoneDigits);
-
-      await sendWhatsAppText(
-        from,
-        `✅ *Solicitud recibida*\n\nYa pasé tu interés por *${tour?.title || "ese tour"}* al equipo.\n\nTe contactarán para confirmarte disponibilidad, precio y proceso de reserva.`
-      );
-
-      clearIntakeFlow(session);
-      return res.sendStatus(200);
-    }
-
-    // =========================
     // FLIGHTS FLOW
     // =========================
     if (session.state === "await_flight_origin") {
       if (tNorm.length < 2) {
-        await sendWhatsAppText(from, `Indícame desde dónde deseas salir. Ej: Santo Domingo, Punta Cana o Santiago.`);
+        await sendWhatsAppText(
+          from,
+          `Indícame desde dónde deseas salir. Ej: Santo Domingo, Punta Cana o Santiago.`
+        );
         return res.sendStatus(200);
       }
 
       session.pendingDepartureCity = userText;
       session.state = "await_flight_destination";
-      await sendWhatsAppText(from, `Perfecto ✈️\nAhora dime el *destino* o ciudad/país a donde quieres viajar.`);
+      await sendWhatsAppText(
+        from,
+        `Perfecto ✈️\nAhora dime el *destino* o ciudad/país a donde quieres viajar.`
+      );
       return res.sendStatus(200);
     }
 
@@ -3993,26 +4392,38 @@ app.post("/webhook", async (req, res) => {
 
       session.pendingDestination = userText;
       session.state = "await_flight_date";
-      await sendWhatsAppText(from, `Gracias. Ahora dime la *fecha aproximada* del viaje.\nEj: "15 de abril", "en junio" o "ida y vuelta del 10 al 18 de mayo".`);
+      await sendWhatsAppText(
+        from,
+        `Gracias. Ahora dime la *fecha aproximada* del viaje.\nEj: "15 de abril", "en junio" o "ida y vuelta del 10 al 18 de mayo".`
+      );
       return res.sendStatus(200);
     }
 
     if (session.state === "await_flight_date") {
       if (tNorm.length < 2) {
-        await sendWhatsAppText(from, `Por favor, indícame la *fecha aproximada* del vuelo.`);
+        await sendWhatsAppText(
+          from,
+          `Por favor, indícame la *fecha aproximada* del vuelo.`
+        );
         return res.sendStatus(200);
       }
 
       session.pendingTravelDateText = userText;
       session.state = "await_flight_people";
-      await sendWhatsAppText(from, `Perfecto. ¿Para cuántas *personas* sería el boleto aéreo?`);
+      await sendWhatsAppText(
+        from,
+        `Perfecto. ¿Para cuántas *personas* sería el boleto aéreo?`
+      );
       return res.sendStatus(200);
     }
 
     if (session.state === "await_flight_people") {
       const pax = parsePassengerCount(userText);
       if (pax === null || pax < 1) {
-        await sendWhatsAppText(from, `Indícame cuántas *personas* viajarían. Ej: 1, 2, 3...`);
+        await sendWhatsAppText(
+          from,
+          `Indícame cuántas *personas* viajarían. Ej: 1, 2, 3...`
+        );
         return res.sendStatus(200);
       }
 
@@ -4030,14 +4441,20 @@ app.post("/webhook", async (req, res) => {
 
       session.pendingName = userText;
       session.state = "await_flight_phone";
-      await sendWhatsAppText(from, `Gracias. Ahora envíame tu *número de teléfono* para que el equipo te contacte.`);
+      await sendWhatsAppText(
+        from,
+        `Gracias. Ahora envíame tu *número de teléfono* para que el equipo te contacte.`
+      );
       return res.sendStatus(200);
     }
 
     if (session.state === "await_flight_phone") {
       const phoneDigits = userText.replace(/[^\d]/g, "");
       if (phoneDigits.length < 8) {
-        await sendWhatsAppText(from, `Ese número parece incompleto 🙏\nEnvíamelo así: 829XXXXXXX`);
+        await sendWhatsAppText(
+          from,
+          `Ese número parece incompleto 🙏\nEnvíamelo así: 829XXXXXXX`
+        );
         return res.sendStatus(200);
       }
 
@@ -4079,19 +4496,28 @@ app.post("/webhook", async (req, res) => {
     // =========================
     if (session.state === "await_hotel_destination") {
       if (tNorm.length < 2) {
-        await sendWhatsAppText(from, `Dime el *destino* o ciudad donde deseas reservar hotel.`);
+        await sendWhatsAppText(
+          from,
+          `Dime el *destino* o ciudad donde deseas reservar hotel.`
+        );
         return res.sendStatus(200);
       }
 
       session.pendingDestination = userText;
       session.state = "await_hotel_date";
-      await sendWhatsAppText(from, `Perfecto 🏨\nAhora dime la *fecha aproximada* del check-in o temporada.`);
+      await sendWhatsAppText(
+        from,
+        `Perfecto 🏨\nAhora dime la *fecha aproximada* del check-in o temporada.`
+      );
       return res.sendStatus(200);
     }
 
     if (session.state === "await_hotel_date") {
       if (tNorm.length < 2) {
-        await sendWhatsAppText(from, `Por favor, indícame la *fecha aproximada* del hotel.`);
+        await sendWhatsAppText(
+          from,
+          `Por favor, indícame la *fecha aproximada* del hotel.`
+        );
         return res.sendStatus(200);
       }
 
@@ -4104,32 +4530,47 @@ app.post("/webhook", async (req, res) => {
     if (session.state === "await_hotel_nights") {
       const nights = parsePassengerCount(userText);
       if (nights === null || nights < 1) {
-        await sendWhatsAppText(from, `Indícame cuántas *noches* serían. Ej: 2, 3, 5...`);
+        await sendWhatsAppText(
+          from,
+          `Indícame cuántas *noches* serían. Ej: 2, 3, 5...`
+        );
         return res.sendStatus(200);
       }
 
       session.pendingNights = nights;
       session.state = "await_hotel_people";
-      await sendWhatsAppText(from, `Perfecto. ¿Para cuántas *personas* sería la reserva del hotel?`);
+      await sendWhatsAppText(
+        from,
+        `Perfecto. ¿Para cuántas *personas* sería la reserva del hotel?`
+      );
       return res.sendStatus(200);
     }
 
     if (session.state === "await_hotel_people") {
       const pax = parsePassengerCount(userText);
       if (pax === null || pax < 1) {
-        await sendWhatsAppText(from, `Indícame cuántas *personas* se hospedarían. Ej: 2`);
+        await sendWhatsAppText(
+          from,
+          `Indícame cuántas *personas* se hospedarían. Ej: 2`
+        );
         return res.sendStatus(200);
       }
 
       session.pendingPassengers = pax;
       session.state = "await_hotel_stars";
-      await sendWhatsAppText(from, `Perfecto. ¿Qué tipo de hotel prefieres?\nEj: *3 estrellas*, *4 estrellas* o *5 estrellas*.`);
+      await sendWhatsAppText(
+        from,
+        `Perfecto. ¿Qué tipo de hotel prefieres?\nEj: *3 estrellas*, *4 estrellas* o *5 estrellas*.`
+      );
       return res.sendStatus(200);
     }
 
     if (session.state === "await_hotel_stars") {
       if (tNorm.length < 2) {
-        await sendWhatsAppText(from, `Indícame si prefieres *3 estrellas*, *4 estrellas* o *5 estrellas*.`);
+        await sendWhatsAppText(
+          from,
+          `Indícame si prefieres *3 estrellas*, *4 estrellas* o *5 estrellas*.`
+        );
         return res.sendStatus(200);
       }
 
@@ -4147,14 +4588,20 @@ app.post("/webhook", async (req, res) => {
 
       session.pendingName = userText;
       session.state = "await_hotel_phone";
-      await sendWhatsAppText(from, `Gracias. Ahora envíame tu *número de teléfono* para que el equipo te contacte.`);
+      await sendWhatsAppText(
+        from,
+        `Gracias. Ahora envíame tu *número de teléfono* para que el equipo te contacte.`
+      );
       return res.sendStatus(200);
     }
 
     if (session.state === "await_hotel_phone") {
       const phoneDigits = userText.replace(/[^\d]/g, "");
       if (phoneDigits.length < 8) {
-        await sendWhatsAppText(from, `Ese número parece incompleto 🙏\nEnvíamelo así: 829XXXXXXX`);
+        await sendWhatsAppText(
+          from,
+          `Ese número parece incompleto 🙏\nEnvíamelo así: 829XXXXXXX`
+        );
         return res.sendStatus(200);
       }
 
@@ -4198,20 +4645,29 @@ app.post("/webhook", async (req, res) => {
     // =========================
     if (session.state === "await_insurance_destination") {
       if (tNorm.length < 2) {
-        await sendWhatsAppText(from, `Indícame el *país o destino* para tu seguro de viaje.`);
+        await sendWhatsAppText(
+          from,
+          `Indícame el *país o destino* para tu seguro de viaje.`
+        );
         return res.sendStatus(200);
       }
 
       session.pendingDestination = userText;
       session.state = "await_insurance_days";
-      await sendWhatsAppText(from, `Perfecto 🛡️\n¿Cuántos *días* durará el viaje?`);
+      await sendWhatsAppText(
+        from,
+        `Perfecto 🛡️\n¿Cuántos *días* durará el viaje?`
+      );
       return res.sendStatus(200);
     }
 
     if (session.state === "await_insurance_days") {
       const days = parsePassengerCount(userText);
       if (days === null || days < 1) {
-        await sendWhatsAppText(from, `Indícame cuántos *días* durará el viaje. Ej: 5, 8, 12...`);
+        await sendWhatsAppText(
+          from,
+          `Indícame cuántos *días* durará el viaje. Ej: 5, 8, 12...`
+        );
         return res.sendStatus(200);
       }
 
@@ -4224,19 +4680,28 @@ app.post("/webhook", async (req, res) => {
     if (session.state === "await_insurance_people") {
       const pax = parsePassengerCount(userText);
       if (pax === null || pax < 1) {
-        await sendWhatsAppText(from, `Indícame cuántas *personas* necesitan el seguro. Ej: 1, 2, 3...`);
+        await sendWhatsAppText(
+          from,
+          `Indícame cuántas *personas* necesitan el seguro. Ej: 1, 2, 3...`
+        );
         return res.sendStatus(200);
       }
 
       session.pendingPassengers = pax;
       session.state = "await_insurance_ages";
-      await sendWhatsAppText(from, `Perfecto. Ahora dime las *edades* de los viajeros.\nEj: 34 y 29 / 40, 12 y 8`);
+      await sendWhatsAppText(
+        from,
+        `Perfecto. Ahora dime las *edades* de los viajeros.\nEj: 34 y 29 / 40, 12 y 8`
+      );
       return res.sendStatus(200);
     }
 
     if (session.state === "await_insurance_ages") {
       if (tNorm.length < 1) {
-        await sendWhatsAppText(from, `Por favor, indícame las *edades* de los viajeros.`);
+        await sendWhatsAppText(
+          from,
+          `Por favor, indícame las *edades* de los viajeros.`
+        );
         return res.sendStatus(200);
       }
 
@@ -4254,14 +4719,20 @@ app.post("/webhook", async (req, res) => {
 
       session.pendingName = userText;
       session.state = "await_insurance_phone";
-      await sendWhatsAppText(from, `Gracias. Ahora envíame tu *número de teléfono* para que el equipo te contacte.`);
+      await sendWhatsAppText(
+        from,
+        `Gracias. Ahora envíame tu *número de teléfono* para que el equipo te contacte.`
+      );
       return res.sendStatus(200);
     }
 
     if (session.state === "await_insurance_phone") {
       const phoneDigits = userText.replace(/[^\d]/g, "");
       if (phoneDigits.length < 8) {
-        await sendWhatsAppText(from, `Ese número parece incompleto 🙏\nEnvíamelo así: 829XXXXXXX`);
+        await sendWhatsAppText(
+          from,
+          `Ese número parece incompleto 🙏\nEnvíamelo así: 829XXXXXXX`
+        );
         return res.sendStatus(200);
       }
 
@@ -4303,32 +4774,47 @@ app.post("/webhook", async (req, res) => {
     // =========================
     if (session.state === "await_transfer_route") {
       if (tNorm.length < 2) {
-        await sendWhatsAppText(from, `Dime la *ruta del traslado*.\nEj: aeropuerto → hotel / hotel → aeropuerto / ciudad → ciudad.`);
+        await sendWhatsAppText(
+          from,
+          `Dime la *ruta del traslado*.\nEj: aeropuerto → hotel / hotel → aeropuerto / ciudad → ciudad.`
+        );
         return res.sendStatus(200);
       }
 
       session.pendingTransferRoute = userText;
       session.state = "await_transfer_date";
-      await sendWhatsAppText(from, `Perfecto 🚕\nAhora dime la *fecha aproximada* del traslado.`);
+      await sendWhatsAppText(
+        from,
+        `Perfecto 🚕\nAhora dime la *fecha aproximada* del traslado.`
+      );
       return res.sendStatus(200);
     }
 
     if (session.state === "await_transfer_date") {
       if (tNorm.length < 2) {
-        await sendWhatsAppText(from, `Por favor, indícame la *fecha aproximada* del traslado.`);
+        await sendWhatsAppText(
+          from,
+          `Por favor, indícame la *fecha aproximada* del traslado.`
+        );
         return res.sendStatus(200);
       }
 
       session.pendingTravelDateText = userText;
       session.state = "await_transfer_people";
-      await sendWhatsAppText(from, `Gracias. ¿Para cuántas *personas* sería el traslado?`);
+      await sendWhatsAppText(
+        from,
+        `Gracias. ¿Para cuántas *personas* sería el traslado?`
+      );
       return res.sendStatus(200);
     }
 
     if (session.state === "await_transfer_people") {
       const pax = parsePassengerCount(userText);
       if (pax === null || pax < 1) {
-        await sendWhatsAppText(from, `Indícame cuántas *personas* viajarían. Ej: 2`);
+        await sendWhatsAppText(
+          from,
+          `Indícame cuántas *personas* viajarían. Ej: 2`
+        );
         return res.sendStatus(200);
       }
 
@@ -4346,14 +4832,20 @@ app.post("/webhook", async (req, res) => {
 
       session.pendingName = userText;
       session.state = "await_transfer_phone";
-      await sendWhatsAppText(from, `Gracias. Ahora envíame tu *número de teléfono* para que el equipo te contacte.`);
+      await sendWhatsAppText(
+        from,
+        `Gracias. Ahora envíame tu *número de teléfono* para que el equipo te contacte.`
+      );
       return res.sendStatus(200);
     }
 
     if (session.state === "await_transfer_phone") {
       const phoneDigits = userText.replace(/[^\d]/g, "");
       if (phoneDigits.length < 8) {
-        await sendWhatsAppText(from, `Ese número parece incompleto 🙏\nEnvíamelo así: 829XXXXXXX`);
+        await sendWhatsAppText(
+          from,
+          `Ese número parece incompleto 🙏\nEnvíamelo así: 829XXXXXXX`
+        );
         return res.sendStatus(200);
       }
 
@@ -4401,44 +4893,65 @@ app.post("/webhook", async (req, res) => {
       } else if (tNorm.length >= 2) {
         session.pendingDestination = userText;
       } else {
-        await sendWhatsAppText(from, `Dime el *país o destino* que te interesa para el paquete vacacional.`);
+        await sendWhatsAppText(
+          from,
+          `Dime el *país o destino* que te interesa para el paquete vacacional.`
+        );
         await sendPackageDestinationsList(from);
         return res.sendStatus(200);
       }
 
       session.state = "await_package_date";
-      await sendWhatsAppText(from, `Perfecto 🎒\nAhora dime la *fecha* o *temporada* que te interesa.\nEj: "julio", "semana santa", "15 de agosto".`);
+      await sendWhatsAppText(
+        from,
+        `Perfecto 🎒\nAhora dime la *fecha* o *temporada* que te interesa.\nEj: "julio", "semana santa", "15 de agosto".`
+      );
       return res.sendStatus(200);
     }
 
     if (session.state === "await_package_date") {
       if (tNorm.length < 2) {
-        await sendWhatsAppText(from, `Por favor, indícame la *fecha* o *temporada* que te interesa.`);
+        await sendWhatsAppText(
+          from,
+          `Por favor, indícame la *fecha* o *temporada* que te interesa.`
+        );
         return res.sendStatus(200);
       }
 
       session.pendingTravelDateText = userText;
       session.state = "await_package_people";
-      await sendWhatsAppText(from, `Gracias. ¿Para cuántas *personas* sería el paquete?`);
+      await sendWhatsAppText(
+        from,
+        `Gracias. ¿Para cuántas *personas* sería el paquete?`
+      );
       return res.sendStatus(200);
     }
 
     if (session.state === "await_package_people") {
       const pax = parsePassengerCount(userText);
       if (pax === null || pax < 1) {
-        await sendWhatsAppText(from, `Indícame cuántas *personas* viajarían. Ej: 2`);
+        await sendWhatsAppText(
+          from,
+          `Indícame cuántas *personas* viajarían. Ej: 2`
+        );
         return res.sendStatus(200);
       }
 
       session.pendingPassengers = pax;
       session.state = "await_package_stars";
-      await sendWhatsAppText(from, `Perfecto. ¿Qué tipo de hotel prefieres dentro del paquete?\nEj: *3 estrellas*, *4 estrellas* o *5 estrellas*.`);
+      await sendWhatsAppText(
+        from,
+        `Perfecto. ¿Qué tipo de hotel prefieres dentro del paquete?\nEj: *3 estrellas*, *4 estrellas* o *5 estrellas*.`
+      );
       return res.sendStatus(200);
     }
 
     if (session.state === "await_package_stars") {
       if (tNorm.length < 2) {
-        await sendWhatsAppText(from, `Indícame si prefieres *3 estrellas*, *4 estrellas* o *5 estrellas*.`);
+        await sendWhatsAppText(
+          from,
+          `Indícame si prefieres *3 estrellas*, *4 estrellas* o *5 estrellas*.`
+        );
         return res.sendStatus(200);
       }
 
@@ -4456,14 +4969,20 @@ app.post("/webhook", async (req, res) => {
 
       session.pendingName = userText;
       session.state = "await_package_phone";
-      await sendWhatsAppText(from, `Gracias. Ahora envíame tu *número de teléfono* para que el equipo te contacte.`);
+      await sendWhatsAppText(
+        from,
+        `Gracias. Ahora envíame tu *número de teléfono* para que el equipo te contacte.`
+      );
       return res.sendStatus(200);
     }
 
     if (session.state === "await_package_phone") {
       const phoneDigits = userText.replace(/[^\d]/g, "");
       if (phoneDigits.length < 8) {
-        await sendWhatsAppText(from, `Ese número parece incompleto 🙏\nEnvíamelo así: 829XXXXXXX`);
+        await sendWhatsAppText(
+          from,
+          `Ese número parece incompleto 🙏\nEnvíamelo así: 829XXXXXXX`
+        );
         return res.sendStatus(200);
       }
 
@@ -4505,7 +5024,10 @@ app.post("/webhook", async (req, res) => {
     // =========================
     if (session.state === "await_advisor_topic") {
       if (tNorm.length < 2) {
-        await sendWhatsAppText(from, `Cuéntame brevemente qué necesitas para poder pasarte con el asesor correcto.`);
+        await sendWhatsAppText(
+          from,
+          `Cuéntame brevemente qué necesitas para poder pasarte con el asesor correcto.`
+        );
         return res.sendStatus(200);
       }
 
@@ -4523,14 +5045,20 @@ app.post("/webhook", async (req, res) => {
 
       session.pendingName = userText;
       session.state = "await_advisor_phone";
-      await sendWhatsAppText(from, `Gracias. Ahora envíame tu *número de teléfono* para que un asesor te contacte.`);
+      await sendWhatsAppText(
+        from,
+        `Gracias. Ahora envíame tu *número de teléfono* para que un asesor te contacte.`
+      );
       return res.sendStatus(200);
     }
 
     if (session.state === "await_advisor_phone") {
       const phoneDigits = userText.replace(/[^\d]/g, "");
       if (phoneDigits.length < 8) {
-        await sendWhatsAppText(from, `Ese número parece incompleto 🙏\nEnvíamelo así: 829XXXXXXX`);
+        await sendWhatsAppText(
+          from,
+          `Ese número parece incompleto 🙏\nEnvíamelo así: 829XXXXXXX`
+        );
         return res.sendStatus(200);
       }
 
@@ -4554,7 +5082,9 @@ app.post("/webhook", async (req, res) => {
 
       await sendWhatsAppText(
         from,
-        `✅ *Solicitud recibida*\n\nYa pasé tu caso para que un asesor de *República Dominicana* te contacte.\n\nTema: ${session.pendingAdvisorTopic || "Consulta general"}`
+        `✅ *Solicitud recibida*\n\nYa pasé tu caso para que un asesor de *República Dominicana* te contacte.\n\nTema: ${
+          session.pendingAdvisorTopic || "Consulta general"
+        }`
       );
 
       clearIntakeFlow(session);
@@ -4571,6 +5101,7 @@ app.post("/webhook", async (req, res) => {
       tNorm.includes("ver opciones") ||
       tNorm.includes("inicio")
     ) {
+      clearIntakeFlow(session);
       await sendWhatsAppText(from, mainMenuText());
       await sendServiceLinesList(from);
       return res.sendStatus(200);
@@ -4587,15 +5118,28 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
-    const collectionKey = detectTourCollectionFromUser(userText);
-    if (collectionKey) {
+    // =========================
+    // COLECCIONES VISUALES
+    // =========================
+    const visualCollectionKey = session.state === "idle"
+      ? detectVisualCollectionKeyFromUser(userText)
+      : null;
+
+    if (visualCollectionKey) {
+      clearIntakeFlow(session);
       session.pendingServiceLine = "tours_rd";
-      await sendToursListByCollection(from, collectionKey);
+      session.pendingVisualCollection = visualCollectionKey;
+      session.lastVisualOptions = (
+        getVisualCollectionByKey(visualCollectionKey)?.tours || []
+      ).map((t) => t.key);
+      session.state = "await_visual_tour_choice";
+
+      await sendVisualCollectionList(from, visualCollectionKey);
       return res.sendStatus(200);
     }
 
     // =========================
-    // TOUR ESPECÍFICO PRIMERO
+    // TOUR ESTRUCTURADO PRIMERO
     // =========================
     const directDetectedTour = detectTourKeyFromUser(userText);
     if (directDetectedTour) {
@@ -4603,8 +5147,6 @@ app.post("/webhook", async (req, res) => {
       session.pendingTour = directDetectedTour;
       const tour = getTourByKey(directDetectedTour);
       updateLead(session, { tour_key: directDetectedTour });
-
-      await sendTourPresentation(from, tour);
 
       if (
         wantsQuote(tNorm) ||
@@ -4617,56 +5159,39 @@ app.post("/webhook", async (req, res) => {
         return res.sendStatus(200);
       }
 
-      if (isCatalogOnlyTour(tour)) {
-        session.state = "await_day";
-        await sendWhatsAppText(
-          from,
-          `Si deseas cotizar o reservar *${tour.title}*, dime la *fecha* o *temporada* que te interesa.`
-        );
-        return res.sendStatus(200);
-      }
-
       const range = parseDateRangeFromText(userText);
       if (!range) {
-        session.state = "await_day";
         await sendWhatsAppText(
           from,
-          `Si deseas reservar *${tour.title}*, dime la *fecha* o el *día* que te interesa.\nEj: "mañana", "viernes" o "14 de junio".`
+          `${buildTourInfoText(
+            tour
+          )}\n\nSi deseas reservar, dime la *fecha* o el *día* que te interesa.\nEj: "mañana", "viernes" o "14 de junio".`
         );
+        session.state = "await_day";
         return res.sendStatus(200);
       }
 
-      try {
-        const slots = await getAvailableSlotsTool({
-          tour_key: directDetectedTour,
-          from: range.from,
-          to: range.to,
-        });
+      const slots = await getAvailableSlotsTool({
+        tour_key: directDetectedTour,
+        from: range.from,
+        to: range.to,
+      });
 
-        if (!slots.length) {
-          await sendWhatsAppText(
-            from,
-            `No veo salidas disponibles para ese rango 🙏\nDime otro día o mes y te comparto más opciones.`
-          );
-          session.state = "await_day";
-          return res.sendStatus(200);
-        }
-
-        session.pendingRange = range;
-        session.lastSlots = slots;
-        session.state = "await_slot_choice";
-        const listText = formatSlotsList(directDetectedTour, slots, session);
-        await sendWhatsAppText(from, listText);
-        return res.sendStatus(200);
-      } catch (e) {
-        console.error("directDetectedTour availability error:", e?.response?.data || e?.message || e);
-        session.state = "await_day";
+      if (!slots.length) {
         await sendWhatsAppText(
           from,
-          `Ahora mismo no pude revisar la disponibilidad automática de *${tour.title}* 🙏\nPuedes enviarme la fecha y lo paso para validación manual.`
+          `No veo salidas disponibles para ese rango 🙏\nDime otro día o mes y te comparto más opciones.`
         );
+        session.state = "await_day";
         return res.sendStatus(200);
       }
+
+      session.pendingRange = range;
+      session.lastSlots = slots;
+      session.state = "await_slot_choice";
+      const listText = formatSlotsList(directDetectedTour, slots, session);
+      await sendWhatsAppText(from, listText);
+      return res.sendStatus(200);
     }
 
     // =========================
@@ -4688,6 +5213,17 @@ app.post("/webhook", async (req, res) => {
     if (originKey && !session.pendingTour) {
       session.pendingServiceLine = "tours_rd";
       session.pendingOrigin = originKey;
+
+      if (originKey === "punta_cana") {
+        session.pendingVisualCollection = "tours_punta_cana";
+        session.lastVisualOptions = (
+          getVisualCollectionByKey("tours_punta_cana")?.tours || []
+        ).map((t) => t.key);
+        session.state = "await_visual_tour_choice";
+        await sendVisualCollectionList(from, "tours_punta_cana");
+        return res.sendStatus(200);
+      }
+
       await sendToursListByOrigin(from, originKey);
       return res.sendStatus(200);
     }
@@ -4778,51 +5314,48 @@ app.post("/webhook", async (req, res) => {
 
     if (
       session.pendingTour &&
-      (wantsQuote(tNorm) || wantsIncludes(tNorm) || wantsSchedule(tNorm) || wantsPayments(tNorm) || wantsPolicies(tNorm))
+      (wantsQuote(tNorm) ||
+        wantsIncludes(tNorm) ||
+        wantsSchedule(tNorm) ||
+        wantsPayments(tNorm) ||
+        wantsPolicies(tNorm))
     ) {
       const tour = getTourByKey(session.pendingTour);
-      if (tour?.coverImageUrl) {
-        try {
-          await sendWhatsAppImage(from, tour.coverImageUrl, `🌴 ${tour.title}`, "BOT");
-        } catch {}
-      }
       await sendWhatsAppText(from, buildTourFaqReply(tour, tNorm));
       return res.sendStatus(200);
     }
 
-    if (session.pendingTour && session.state === "idle") {
-      const tour = getTourByKey(session.pendingTour);
+    if (session.pendingTour) {
+      const range = parseDateRangeFromText(userText);
+      if (range) {
+        const slots = await getAvailableSlotsTool({
+          tour_key: session.pendingTour,
+          from: range.from,
+          to: range.to,
+        });
+        if (!slots.length) {
+          await sendWhatsAppText(
+            from,
+            `No veo salidas disponibles para ese rango 🙏\nDime otro día o un mes y te comparto más opciones.`
+          );
+          session.state = "await_day";
+          return res.sendStatus(200);
+        }
 
-      if (isCatalogOnlyTour(tour) && tNorm.length >= 2) {
-        session.state = "await_day";
-        session.pendingTravelDateText = userText;
-        await sendWhatsAppText(from, `Perfecto 👍\n¿Para cuántas *personas* sería *${tour?.title || "ese tour"}*?`);
-        session.state = "await_catalog_tour_people";
+        session.pendingRange = range;
+        session.lastSlots = slots;
+        session.state = "await_slot_choice";
+        const listText = formatSlotsList(session.pendingTour, slots, session);
+        await sendWhatsAppText(from, listText);
         return res.sendStatus(200);
       }
 
-      const range = parseDateRangeFromText(userText);
-      if (range && isCalendarTour(tour)) {
-        try {
-          const slots = await getAvailableSlotsTool({ tour_key: session.pendingTour, from: range.from, to: range.to });
-          if (!slots.length) {
-            await sendWhatsAppText(from, `No veo salidas disponibles para ese rango 🙏\nDime otro día o un mes y te comparto más opciones.`);
-            session.state = "await_day";
-            return res.sendStatus(200);
-          }
-
-          session.pendingRange = range;
-          session.lastSlots = slots;
-          session.state = "await_slot_choice";
-          const listText = formatSlotsList(session.pendingTour, slots, session);
-          await sendWhatsAppText(from, listText);
-          return res.sendStatus(200);
-        } catch (e) {
-          console.error("pendingTour availability error:", e?.response?.data || e?.message || e);
-          session.state = "await_day";
-          await sendWhatsAppText(from, `No pude revisar la disponibilidad automática ahora mismo 🙏\nEnvíame la fecha y lo paso para revisión manual.`);
-          return res.sendStatus(200);
-        }
+      if (session.state === "await_day") {
+        await sendWhatsAppText(
+          from,
+          `Para elegir la fecha, puedes escribir: "mañana", "viernes", "próximo martes", "14 de junio" o "en julio".`
+        );
+        return res.sendStatus(200);
       }
     }
 
@@ -4833,12 +5366,11 @@ app.post("/webhook", async (req, res) => {
       session,
       userText,
       userPhone: from,
-      extraSystem:
-        session.pendingTour
-          ? `Nota: el tour actual pendiente es ${session.pendingTour}.`
-          : session.pendingServiceLine
-          ? `Nota: el servicio actual pendiente es ${session.pendingServiceLine}.`
-          : "",
+      extraSystem: session.pendingTour
+        ? `Nota: el tour actual pendiente es ${session.pendingTour}.`
+        : session.pendingServiceLine
+        ? `Nota: el servicio actual pendiente es ${session.pendingServiceLine}.`
+        : "",
     });
 
     await sendWhatsAppText(from, reply);
@@ -4890,12 +5422,14 @@ async function followupLeadsLoop() {
       const ageMs = now - new Date(lead.lastInteractionAt).getTime();
       if (!Number.isFinite(ageMs) || ageMs < minAgeMs || ageMs > maxAgeMs) continue;
 
-      const tour = getTourByKey(lead.tour_key);
-      if (!tour) continue;
+      const structuredTour = getTourByKey(lead.tour_key);
+      const visualTour = getVisualTourByKey(lead.tour_key);
+      const tourTitle =
+        structuredTour?.title || visualTour?.title || "tu tour";
 
       const msg =
-        `Hola 👋 Quedó pendiente tu solicitud para *${tour.title}*.\n\n` +
-        `Si deseas, te ayudo a continuar con la fecha que te interesa 😊`;
+        `Hola 👋 Quedó pendiente tu solicitud para *${tourTitle}*.\n\n` +
+        `Si deseas, te ayudo a continuar con tu reserva o consulta. Solo responde con la fecha o escríbeme *menú*.`;
 
       try {
         await sendWhatsAppText(id, msg, "BOT");
@@ -4918,7 +5452,11 @@ async function reminderLoop() {
     const calendar = getCalendarClient();
     const now = new Date();
     const in26h = addMinutes(now, 26 * 60);
-    const events = await listReservationEvents(calendar, now.toISOString(), in26h.toISOString());
+    const events = await listReservationEvents(
+      calendar,
+      now.toISOString(),
+      in26h.toISOString()
+    );
 
     for (const ev of events) {
       const priv = ev.extendedProperties?.private || {};
@@ -4929,41 +5467,73 @@ async function reminderLoop() {
       if (!phone || !startISO) continue;
 
       const start = new Date(startISO);
-      const minutesToStart = Math.round((start.getTime() - now.getTime()) / 60000);
+      const minutesToStart = Math.round(
+        (start.getTime() - now.getTime()) / 60000
+      );
       const tour = getTourByKey(String(priv.tour_key || "").trim());
-      const pickup = String(priv.pickup || "").trim() || tour?.meetingPoint || BUSINESS_ADDRESS || "Punto coordinado";
+      const pickup =
+        String(priv.pickup || "").trim() ||
+        tour?.meetingPoint ||
+        BUSINESS_ADDRESS ||
+        "Punto coordinado";
 
       const in24hWindow = minutesToStart <= 25 * 60 && minutesToStart >= 23 * 60;
       const in2hWindow = minutesToStart <= 135 && minutesToStart >= 90;
 
       if (REMINDER_24H && in24hWindow && priv.reminder24hSent !== "true") {
         const msg =
-          `Recordatorio 🌴: mañana tienes reserva para *${tour?.title || "tu tour"}* a las ${formatTimeInTZ(startISO, BUSINESS_TIMEZONE)}.\n` +
+          `Recordatorio 🌴: mañana tienes reserva para *${
+            tour?.title || "tu tour"
+          }* a las ${formatTimeInTZ(
+            startISO,
+            BUSINESS_TIMEZONE
+          )}.\n` +
           `🚐 Salida / pickup: ${pickup}\n\n` +
           `Responde:\n1) Confirmar\n2) Reprogramar\n3) Cancelar`;
 
-        const sendRes = await sendReminderWhatsAppToBestTarget(priv, phone, msg);
+        const sendRes = await sendReminderWhatsAppToBestTarget(
+          priv,
+          phone,
+          msg
+        );
         if (sendRes.ok) {
           await calendar.events.patch({
             calendarId: GOOGLE_CALENDAR_ID,
             eventId: ev.id,
-            requestBody: { extendedProperties: { private: { ...priv, reminder24hSent: "true" } } },
+            requestBody: {
+              extendedProperties: {
+                private: { ...priv, reminder24hSent: "true" },
+              },
+            },
           });
         }
       }
 
       if (REMINDER_2H && in2hWindow && priv.reminder2hSent !== "true") {
         const msg =
-          `Recordatorio 🌴: tu salida para *${tour?.title || "tu tour"}* es hoy a las ${formatTimeInTZ(startISO, BUSINESS_TIMEZONE)}.\n` +
+          `Recordatorio 🌴: tu salida para *${
+            tour?.title || "tu tour"
+          }* es hoy a las ${formatTimeInTZ(
+            startISO,
+            BUSINESS_TIMEZONE
+          )}.\n` +
           `🚐 Punto de salida: ${pickup}\n\n` +
           `Responde:\n1) Confirmar\n2) Reprogramar\n3) Cancelar`;
 
-        const sendRes = await sendReminderWhatsAppToBestTarget(priv, phone, msg);
+        const sendRes = await sendReminderWhatsAppToBestTarget(
+          priv,
+          phone,
+          msg
+        );
         if (sendRes.ok) {
           await calendar.events.patch({
             calendarId: GOOGLE_CALENDAR_ID,
             eventId: ev.id,
-            requestBody: { extendedProperties: { private: { ...priv, reminder2hSent: "true" } } },
+            requestBody: {
+              extendedProperties: {
+                private: { ...priv, reminder2hSent: "true" },
+              },
+            },
           });
         }
       }
@@ -4984,7 +5554,10 @@ async function notifyPersonalWhatsAppLeadSummary(summaryText, customerPhone = ""
 
     await sendWhatsAppText(myTo, summaryText, "BOT");
   } catch (e) {
-    console.error("notifyPersonalWhatsAppLeadSummary error:", e?.response?.data || e?.message || e);
+    console.error(
+      "notifyPersonalWhatsAppLeadSummary error:",
+      e?.response?.data || e?.message || e
+    );
   }
 }
 
