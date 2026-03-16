@@ -1928,8 +1928,7 @@ function formatRealToursTextList(groupKey, session) {
     `Tours disponibles:
 
 ` +
-    tours.map((t, i) => `${i + 1}. ${t.title}`).join("
-") +
+    tours.map((t, i) => `${i + 1}. ${t.title}`).join("\n") +
     `
 
 Responde con el *número* o con el *nombre* del tour que deseas ver.
@@ -2041,8 +2040,7 @@ function buildRealTourInfoText(tour) {
   lines.push(``);
   lines.push(buildRealTourReserveHint());
 
-  return lines.join("
-");
+  return lines.join("\n");
 }
 
 function buildRealTourLeadSummary(session, phoneDigits) {
