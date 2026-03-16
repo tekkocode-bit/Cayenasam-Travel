@@ -1822,17 +1822,18 @@ function serviceLineLabel(key) {
 function categoriesEmojiText() {
   return (
     `🌴 *Tours en República Dominicana*\n\n` +
-    `Puedo mostrarte las colecciones reales cargadas del cliente:\n` +
+    `Te muestro las colecciones reales disponibles de la agencia para que elijas la que más te interese:\n` +
     `• Tours desde Punta Cana\n` +
     `• Tours de Marzo\n` +
     `• Tours Semana Santa\n\n` +
-    `Elige una opción o escríbela tal cual.`
+    `Selecciona una colección o escríbela tal cual y te enseño las opciones disponibles.`
   );
 }
 
 function mainMenuText() {
   return (
-    `👋 ¡Hola! Soy el asistente de *${BUSINESS_NAME}*.\n\n` +
+    `👋 ¡Bienvenido a *${BUSINESS_NAME}*! Soy tu asistente virtual de viajes.\n\n` +
+    `Estoy aquí para ayudarte a cotizar, elegir opciones y dejar tu solicitud casi lista para reserva y pago.\n\n` +
     `Puedo ayudarte con:\n` +
     `🌴 Tours en República Dominicana\n` +
     `✈️ Boletos aéreos\n` +
@@ -1842,7 +1843,7 @@ function mainMenuText() {
     `🎒 Paquetes vacacionales\n` +
     `👤 Hablar con un asesor\n` +
     `📍 Ubicación y contacto\n\n` +
-    `También puedes escribirme cosas como *"Tours desde Punta Cana"*, *"Tours de Marzo"* o *"Semana Santa"* y te muestro las opciones reales cargadas.`
+    `También puedes escribirme directamente *"Tours desde Punta Cana"*, *"Tours de Marzo"* o *"Tours Semana Santa"* y te mostraré las opciones reales cargadas por la agencia.`
   );
 }
 
@@ -1855,7 +1856,7 @@ function formatRealToursTextList(groupKey, session) {
   const group = getRealTourGroupByKey(groupKey);
   const tours = getRealToursByGroup(groupKey);
 
-  if (!group || !tours.length) return "No encontré tours en esa colección ahora mismo 🙏";
+  if (!group || !tours.length) return "No encontré tours disponibles en esa colección ahora mismo 🙏";
 
   if (session) {
     session.lastRealTours = tours.map((t) => ({ key: t.key, title: t.title }));
@@ -1863,8 +1864,9 @@ function formatRealToursTextList(groupKey, session) {
 
   return (
     `🌴 *${group.title}*\n\n` +
+    `Estas son las opciones reales cargadas por la agencia en esta colección:\n\n` +
     tours.map((t, i) => `${i + 1}. ${t.title}`).join("\n") +
-    `\n\nResponde con el *número* o con el *nombre* del tour que te interesa.`
+    `\n\nResponde con el *número* o con el *nombre* del tour que deseas ver.`
   );
 }
 
@@ -1890,11 +1892,26 @@ function parseRealTourChoice(session, userText) {
 
 function buildRealTourInfoText(tour) {
   const group = getRealTourGroupByKey(tour?.groupKey);
+
+  const groupDescription =
+    group?.key === "tours_punta_cana"
+      ? "Experiencia disponible en Punta Cana."
+      : group?.key === "tours_marzo"
+      ? "Salida o promoción especial correspondiente a la colección de marzo."
+      : group?.key === "tours_semana_santa"
+      ? "Opción especial cargada para temporada de Semana Santa."
+      : "Opción de tour cargada por la agencia.";
+
   return (
-    `🌴 *${tour?.title || "Tour"}*\n` +
+    `🌴 *Tour seleccionado: ${tour?.title || "Tour"}*\n` +
     `🗂️ Colección: ${group?.title || "Tours"}\n` +
-    `📸 Te envié la imagen oficial del cliente con la información disponible.\n\n` +
-    `Si deseas agendar este tour, respóndeme con la *fecha* que te interesa y luego te pediré tus datos para dejar la solicitud casi lista para contacto y pago.`
+    `📍 Tipo de salida: ${groupDescription}\n` +
+    `🖼️ Ya te envié la imagen oficial de la agencia para este tour.\n\n` +
+    `*Resumen importante:*\n` +
+    `• El nombre del tour ya quedó identificado en el chat.\n` +
+    `• La imagen enviada contiene la información comercial publicada por la agencia.\n` +
+    `• Ahí podrás ver precio, fechas, actividades, beneficios o detalles visuales del tour según corresponda.\n\n` +
+    `Cuando me indiques la fecha que te interesa, te pediré tus datos para dejar la solicitud casi lista para confirmación y pago.`
   );
 }
 
@@ -2117,9 +2134,9 @@ async function sendRealTourGroupsList(to) {
       interactive: {
         type: "list",
         header: { type: "text", text: "Colecciones de tours" },
-        body: { text: "Selecciona la colección que deseas ver 👇" },
+        body: { text: "Elige la colección de tours que deseas explorar 👇" },
         footer: { text: BUSINESS_NAME },
-        action: { button: "Ver colecciones", sections: [{ title: "Tours", rows }] },
+        action: { button: "Ver colecciones", sections: [{ title: "Tours disponibles", rows }] },
       },
     },
     { headers: { Authorization: `Bearer ${WA_TOKEN}` } }
@@ -2137,7 +2154,7 @@ async function sendRealTourPresentation(to, tour) {
     await sendWhatsAppImage(
       to,
       tour.imageUrl,
-      `🌴 ${tour.title}\n📸 Imagen oficial enviada por el cliente`
+      `🌴 *${tour.title}*\n📸 Imagen oficial enviada por la agencia\n📍 Revisa la pieza para ver la información comercial publicada del tour`
     );
   }
   await sendWhatsAppText(to, buildRealTourInfoText(tour));
@@ -3135,7 +3152,7 @@ app.post("/webhook", async (req, res) => {
       if (!groupKey) {
         await sendWhatsAppText(
           from,
-          `Perfecto 🌴\nElige una de estas colecciones:\n\n• Tours desde Punta Cana\n• Tours de Marzo\n• Tours Semana Santa`
+          `Perfecto 🌴\nTe mostraré las colecciones reales disponibles de la agencia.\n\nElige una de estas opciones:\n• Tours desde Punta Cana\n• Tours de Marzo\n• Tours Semana Santa`
         );
         await sendRealTourGroupsList(from);
         return res.sendStatus(200);
@@ -3178,7 +3195,7 @@ app.post("/webhook", async (req, res) => {
       await sendRealTourPresentation(from, pickedTour);
       await sendWhatsAppText(
         from,
-        `Ahora dime la *fecha* que te interesa para *${pickedTour.title}*.\nEj: "sábado", "15 de abril", "semana santa".`
+        `📅 Ahora dime la *fecha* que te interesa para *${pickedTour.title}*.\nEj: "sábado", "15 de abril", "domingo" o "semana santa".`
       );
       return res.sendStatus(200);
     }
@@ -3281,7 +3298,7 @@ app.post("/webhook", async (req, res) => {
           `👥 Pasajeros: *${Number(session.pendingAdults || 0) + Number(session.pendingChildren || 0)}*\n` +
           `🚐 Pickup: ${session.pendingPickup || "—"}\n` +
           `📍 Ciudad: ${session.pendingCity || "—"}\n\n` +
-          `Un asesor te contactará para confirmar disponibilidad y gestionar el pago.`
+          `Tu solicitud quedó casi lista. Ahora un asesor de la agencia te contactará para confirmar disponibilidad, validarte el monto final y gestionar el pago.`
       );
 
       clearIntakeFlow(session);
@@ -4041,7 +4058,7 @@ app.post("/webhook", async (req, res) => {
       session.pendingServiceLine = "tours_rd";
       session.pendingRealTourGroup = directRealTourGroup;
       session.state = "await_real_tour_choice";
-      await sendWhatsAppText(from, `Perfecto 🌴\nAquí tienes las opciones de *${getRealTourGroupByKey(directRealTourGroup)?.title || "Tours"}*.`);
+      await sendWhatsAppText(from, `Perfecto 🌴\nAquí tienes las opciones reales de *${getRealTourGroupByKey(directRealTourGroup)?.title || "Tours"}* cargadas por la agencia.`);
       await sendRealToursByGroup(from, directRealTourGroup, session);
       return res.sendStatus(200);
     }
@@ -4056,7 +4073,7 @@ app.post("/webhook", async (req, res) => {
       session.state = "await_real_tour_date";
       updateLead(session, { tour_key: directRealTourKey, quotePreview: "", converted: false, followupSent: false });
       await sendRealTourPresentation(from, tour);
-      await sendWhatsAppText(from, `Si deseas agendar *${tour?.title || "este tour"}*, dime la *fecha* que te interesa.`);
+      await sendWhatsAppText(from, `📅 Si deseas agendar *${tour?.title || "este tour"}*, dime la *fecha* que te interesa y seguimos con tu solicitud.`);
       return res.sendStatus(200);
     }
 
