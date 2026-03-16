@@ -432,19 +432,20 @@ const REAL_TOURS = safeJson(process.env.REAL_TOUR_CATALOG_JSON, null) || buildRe
 const REAL_TOUR_ID_TO_KEY = Object.fromEntries(REAL_TOURS.map((t) => [t.id, t.key]));
 
 const REAL_TOUR_TEXT_OVERRIDES = {
+  pc_scoobadoo: {
+    priceText: "Desde US$85 por adulto.",
+    dateText: "Todos los días.",
+    includesText: "Traslado desde tu hotel, experiencia Scoobadoo sumergible, snorkel para ver corales, barco panorámico y snack incluido.",
+  },
   marzo_santa_fe_full_day: {
-    summaryIntro: "Escapada full day ideal para disfrutar un día diferente con ambiente relajado y paseo por puntos atractivos de Santa Fe.",
-    dateText: "Domingos 01, 08, 15, 22 y 29 de marzo.",
     priceText: "RD$3,750 adultos / RD$3,300 niños.",
+    dateText: "Domingos 01, 08, 15, 22 y 29 de marzo.",
     includesText: "Transporte, desayuno, almuerzo, piscina, city tours y visita a Calles de las Sombrillas.",
-    noteText: "La promoción publicada corresponde a salidas dominicales dentro de la programación de marzo.",
   },
   ss_polaris: {
-    summaryIntro: "Aventura en Polaris pensada para quienes buscan adrenalina y actividades al aire libre durante Semana Santa.",
     dateText: "04 y 05 de abril.",
     reserveText: "Reserva con RD$1,000.",
     includesText: "Transporte, desayuno, almuerzo, experiencia en Polaris y zipline.",
-    noteText: "La pieza promocional compartida por la agencia corresponde a la colección de Semana Santa.",
   },
 };
 
@@ -2001,46 +2002,64 @@ function buildRealTourReserveHint() {
 }
 
 function buildRealTourInfoText(tour) {
-  const group = getRealTourGroupByKey(tour?.groupKey);
-  const details = getRealTourTextDetails(tour);
-  const lines = [
-    `🌴 *${tour?.title || "Tour"}*`,
-    details?.summaryIntro || inferRealTourExperienceText(tour?.title || ""),
-    ``,
-    `🗂️ Colección: ${getRealTourCollectionLabel(group?.key)}`,
-  ];
+  const details = getRealTourTextDetails(tour) || {};
+  const lines = [`🌴 *${tour?.title || "Tour"}*`];
 
-  if (details?.dateText) {
-    lines.push(`📅 Fechas / salidas publicadas: ${details.dateText}`);
-  } else {
-    lines.push(`📅 Fechas / salidas: revisa en la imagen los días, fechas o temporada publicada por la agencia.`);
+  if (details.summaryIntro) {
+    lines.push(details.summaryIntro);
   }
 
-  if (details?.priceText) {
-    lines.push(`💵 Tarifas publicadas: ${details.priceText}`);
-  } else {
-    lines.push(`💵 Tarifas: en la imagen podrás ver el precio publicado por la agencia para esta excursión.`);
+  if (details.priceText) {
+    lines.push(`💵 ${details.priceText}`);
   }
 
-  if (details?.reserveText) {
-    lines.push(`🧾 Reserva / avance: ${details.reserveText}`);
+  if (details.durationText) {
+    lines.push(`⏳ ${details.durationText}`);
   }
 
-  if (details?.includesText) {
-    lines.push(`✅ Incluye / destacados: ${details.includesText}`);
-  } else {
-    lines.push(`✅ La pieza promocional muestra los beneficios, actividades o servicios incluidos que aplican a este tour.`);
+  if (details.dateText) {
+    lines.push(`📅 ${details.dateText}`);
   }
 
-  if (details?.noteText) {
-    lines.push(`📌 Nota importante: ${details.noteText}`);
+  if (details.meetingPointText) {
+    lines.push(`📍 ${details.meetingPointText}`);
   }
 
-  lines.push(`🖼️ Ya te envié la imagen promocional oficial para que también puedas revisar el arte visual del tour.`);
-  lines.push(``);
+  if (details.pickupText) {
+    lines.push(`🚐 ${details.pickupText}`);
+  }
+
+  if (details.includesText) {
+    lines.push(`✅ ${details.includesText}`);
+  }
+
+  if (details.paymentText) {
+    lines.push(`💳 ${details.paymentText}`);
+  }
+
+  if (details.reserveText) {
+    lines.push(`📌 ${details.reserveText}`);
+  }
+
+  if (details.noteText) {
+    lines.push(`📝 ${details.noteText}`);
+  }
+
+  if (Array.isArray(details.extraTextLines)) {
+    for (const extra of details.extraTextLines) {
+      if (extra) lines.push(String(extra));
+    }
+  }
+
+  if (lines.length === 1) {
+    lines.push(`📸 Revisa la imagen del tour para ver el precio, las fechas y los detalles publicados por la agencia.`);
+  }
+
+  lines.push("");
   lines.push(buildRealTourReserveHint());
 
-  return lines.join("\n");
+  return lines.join("
+");
 }
 
 function buildRealTourLeadSummary(session, phoneDigits) {
@@ -2279,13 +2298,7 @@ async function sendRealToursByGroup(to, groupKey, session) {
 async function sendRealTourPresentation(to, tour) {
   if (!tour) return;
   if (tour.imageUrl) {
-    await sendWhatsAppImage(
-      to,
-      tour.imageUrl,
-      `🌴 *${tour.title}*
-Promoción oficial de la agencia.
-Debajo te dejo también el resumen en texto para que te sea más fácil revisarlo.`
-    );
+    await sendWhatsAppImage(to, tour.imageUrl, `🌴 *${tour.title}*`);
   }
   await sendWhatsAppText(to, buildRealTourInfoText(tour));
 }
