@@ -2146,8 +2146,7 @@ function formatRealToursTextList(groupKey, session) {
     `Estas son las excursiones que puedes consultar en esta colección:
 
 ` +
-    tours.map((t, i) => `${i + 1}. ${t.title}`).join("
-") +
+    tours.map((t, i) => `${i + 1}. ${t.title}`).join("\n") +
     `
 
 Responde con el *número* o con el *nombre* del tour que deseas ver.`
@@ -2178,6 +2177,11 @@ function parseRealTourChoice(session, userText) {
 function getRealTourTextDetails(tour) {
   if (!tour) return null;
   return REAL_TOUR_TEXT_OVERRIDES[tour.key] || null;
+}
+
+function isGoBack(textNorm) {
+  const t = normalizeText(textNorm || "");
+  return ["atras", "atrás", "volver", "regresar", "regresa", "volver atras", "volver atrás"].includes(t);
 }
 
 function inferRealTourExperienceText(title = "") {
@@ -2272,8 +2276,7 @@ function buildRealTourInfoText(tour) {
   lines.push("");
   lines.push(buildRealTourReserveHint());
 
-  return lines.join("
-");
+  return lines.join("\n");
 }
 
 function buildRealTourLeadSummary(session, phoneDigits) {
@@ -3413,6 +3416,59 @@ app.post("/webhook", async (req, res) => {
       await sendWhatsAppText(from, mainMenuText());
       await sendServiceLinesList(from);
       return res.sendStatus(200);
+    }
+
+    if (isGoBack(tNorm)) {
+      const realTourIntakeStates = [
+        "await_real_tour_date",
+        "await_real_tour_adults",
+        "await_real_tour_children",
+        "await_real_tour_pickup",
+        "await_real_tour_city",
+        "await_real_tour_name",
+        "await_real_tour_phone",
+      ];
+
+      if (realTourIntakeStates.includes(session.state) && session.pendingRealTourGroup) {
+        session.state = "await_real_tour_choice";
+        session.pendingRealTourKey = null;
+        session.pendingDesiredDate = null;
+        session.pendingAdults = null;
+        session.pendingChildren = null;
+        session.pendingPickup = null;
+        session.pendingCity = null;
+        session.pendingName = null;
+
+        await sendWhatsAppText(
+          from,
+          `↩️ Perfecto. Volviste al listado de tours de *${getRealTourCollectionLabel(session.pendingRealTourGroup)}*.`
+        );
+        await sendRealToursByGroup(from, session.pendingRealTourGroup, session);
+        return res.sendStatus(200);
+      }
+
+      if (session.state === "await_real_tour_choice") {
+        session.state = "await_tour_group";
+        session.pendingRealTourKey = null;
+        session.pendingDesiredDate = null;
+        await sendWhatsAppText(from, `↩️ Perfecto. Volviste al listado de colecciones de tours.`);
+        await sendRealTourGroupsList(from);
+        return res.sendStatus(200);
+      }
+
+      if (session.state === "await_tour_group" || session.pendingServiceLine === "tours_rd") {
+        clearIntakeFlow(session);
+        await sendWhatsAppText(from, mainMenuText());
+        await sendServiceLinesList(from);
+        return res.sendStatus(200);
+      }
+
+      if (session.state !== "idle") {
+        clearIntakeFlow(session);
+        await sendWhatsAppText(from, mainMenuText());
+        await sendServiceLinesList(from);
+        return res.sendStatus(200);
+      }
     }
 
     if (detectCatalogRequest(tNorm)) {
