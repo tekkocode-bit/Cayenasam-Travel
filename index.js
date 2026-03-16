@@ -1,3 +1,4 @@
+
 import express from "express";
 import axios from "axios";
 import crypto from "crypto";
@@ -80,42 +81,6 @@ function normalizeText(t) {
     .replace(/\p{Diacritic}/gu, "")
     .replace(/\s+/g, " ")
     .trim();
-}
-
-function addDefaultNavHint(text, reportSource = "BOT") {
-  const body = String(text || "").trim();
-  if (!body) return body;
-  if (reportSource !== "BOT") return body;
-
-  const skip =
-    body.includes("↩️ Escribe *atrás*") ||
-    body.includes("Selecciona el servicio que te interesa 👇") ||
-    body.includes("Selecciona la temporada o colección") ||
-    body.includes("Elige una opción del menú") ||
-    body.includes("👋 ¡Bienvenido a") ||
-    body.includes("¡Hola! 😊\nPuedo ayudarte con");
-
-  if (skip) return body;
-  return `${body}\n\n↩️ Escribe *atrás* para volver o *menú* para ir al inicio.`;
-}
-
-function buildLeadAlreadyRegisteredReply() {
-  return (
-    `✅ Tu solicitud ya quedó registrada.\n\n` +
-    `Un asesor de la agencia te contactará para continuar con la confirmación y el pago.\n\n` +
-    `Si deseas seguir explorando opciones, escribe *menú*.`
-  );
-}
-
-function markLeadRegistered(session, summaryText, tourKey = "") {
-  session.lead = {
-    ...defaultLead(),
-    tour_key: tourKey || "",
-    quotePreview: summaryText || "",
-    converted: true,
-    followupSent: true,
-    lastInteractionAt: new Date().toISOString(),
-  };
 }
 
 // =========================
@@ -467,26 +432,243 @@ const REAL_TOURS = safeJson(process.env.REAL_TOUR_CATALOG_JSON, null) || buildRe
 const REAL_TOUR_ID_TO_KEY = Object.fromEntries(REAL_TOURS.map((t) => [t.id, t.key]));
 
 const REAL_TOUR_TEXT_OVERRIDES = {
-  pc_scoobadoo: {
-    priceText: "Desde US$85 por adulto.",
-    dateText: "Todos los días.",
-    includesText:
-      "Traslado desde tu hotel, experiencia Scoobadoo sumergible, snorkel para ver corales, barco panorámico y snack incluido.",
-    pickupText: "Disponible saliendo desde Punta Cana.",
-    paymentText: "Reserva sujeta a confirmación con la agencia.",
+  "pc_scoobadoo": {
+    "priceText": "Desde US$85 por adulto.",
+    "dateText": "Todos los días.",
+    "pickupText": "Traslado disponible desde tu hotel en Punta Cana.",
+    "includesText": "Experiencia Scoobadoo sumergible, snorkel para ver corales, barco panorámico y snack incluido.",
+    "noteText": "La imagen promocional muestra una salida diaria para esta experiencia."
   },
-  marzo_santa_fe_full_day: {
-    priceText: "RD$3,750 adultos / RD$3,300 niños.",
-    dateText: "Domingos 01, 08, 15, 22 y 29 de marzo.",
-    includesText: "Transporte, desayuno, almuerzo, piscina, city tours y visita a Calles de las Sombrillas.",
-    paymentText: "Reserva sujeta a confirmación con la agencia.",
+  "pc_polaris": {
+    "priceText": "Doble US$89 / Familiar US$249.",
+    "dateText": "Todos los días.",
+    "pickupText": "Traslado desde tu hotel en Punta Cana.",
+    "includesText": "Experiencia en Polaris, baño en Macao, visita a cueva taína y casa típica.",
+    "noteText": "La pieza promocional oficial corresponde a una salida diaria desde Punta Cana."
   },
-  ss_polaris: {
-    dateText: "04 y 05 de abril.",
-    reserveText: "Reserva con RD$1,000.",
-    includesText: "Transporte, desayuno, almuerzo, experiencia en Polaris y zipline.",
+  "pc_maroca": {
+    "priceText": "US$65 por persona.",
+    "dateText": "Open bar.",
+    "pickupText": "Traslado desde tu hotel en Punta Cana.",
+    "includesText": "Admisión y experiencia nocturna con open bar según la promoción publicada.",
+    "noteText": "La imagen muestra esta opción como una salida de entretenimiento en Punta Cana."
   },
+  "pc_jet_ski": {
+    "priceText": "US$99 por adulto.",
+    "dateText": "Promoción nueva.",
+    "pickupText": "Traslado desde tu hotel en Punta Cana.",
+    "includesText": "Experiencia Jet Ski y actividades acuáticas según la promoción visual.",
+    "noteText": "La imagen oficial destaca esta excursión como promoción nueva."
+  },
+  "pc_jet_cars": {
+    "priceText": "US$165 por adulto.",
+    "dateText": "Promoción nueva.",
+    "pickupText": "Traslado desde tu hotel en Punta Cana.",
+    "includesText": "Experiencia Jet Cars y actividades acuáticas según la promoción publicada.",
+    "noteText": "La imagen oficial muestra esta opción como novedad dentro del catálogo."
+  },
+  "pc_isla_catalina": {
+    "priceText": "Adultos US$85 / Niños US$65.",
+    "dateText": "Todos los días.",
+    "pickupText": "Traslado desde tu hotel en Punta Cana.",
+    "includesText": "Almuerzo buffet, bebida, catamarán y snorkel para corales.",
+    "noteText": "La pieza oficial publicada por la agencia corresponde a una salida diaria."
+  },
+  "pc_horseback_riding": {
+    "priceText": "US$75 por adulto.",
+    "dateText": "Todos los días.",
+    "pickupText": "Traslado desde tu hotel en Punta Cana.",
+    "includesText": "Paseo a caballo, playa Macao, desembocadura del río Anamuya y casa típica.",
+    "noteText": "La imagen promocional presenta esta excursión con salida diaria."
+  },
+  "pc_fourwheel": {
+    "priceText": "1 persona US$75 / 2 personas US$90.",
+    "dateText": "Todos los días.",
+    "pickupText": "Traslado desde tu hotel en Punta Cana.",
+    "includesText": "Experiencia Fourwheel, baño en Macao, visita a cueva taína y casa típica.",
+    "noteText": "La promoción oficial indica salidas diarias para esta aventura."
+  },
+  "pc_dorado_park": {
+    "priceText": "Adultos US$129 / Niños US$69.",
+    "dateText": "Jueves a domingo.",
+    "pickupText": "Traslado desde tu hotel en Punta Cana.",
+    "includesText": "Acceso al parque, playa artificial y atracciones mostradas en la promoción oficial.",
+    "noteText": "La imagen de la agencia muestra este producto con disponibilidad de jueves a domingo."
+  },
+  "pc_dolphin_ocean_adventure": {
+    "priceText": "Encounters US$120 / Swim US$169 / Royal Swim US$239.",
+    "dateText": "Martes, jueves y sábados.",
+    "durationText": "Duración estimada: 5 horas.",
+    "pickupText": "Traslado desde tu hotel en Punta Cana.",
+    "includesText": "Programas con delfines según el paquete elegido: Encounter, Swim o Royal Swim.",
+    "noteText": "La pieza promocional muestra distintas modalidades y precios para esta experiencia."
+  },
+  "pc_coco_bongo": {
+    "priceText": "Regular US$90 / Gold Member US$170 / Front Row US$190.",
+    "pickupText": "Traslado desde tu hotel en Punta Cana.",
+    "includesText": "Admisión, show variado, snacks según plan y mesas según plan.",
+    "noteText": "La promoción oficial presenta 3 paquetes para disfrutar Coco Bongo."
+  },
+  "pc_cayo_new": {
+    "priceText": "Adultos US$160 / Niños US$149.",
+    "dateText": "Todos los días.",
+    "pickupText": "Traslado desde tu hotel en Punta Cana.",
+    "includesText": "La imagen promocional muestra comida, bebida y recorrido a playa/cayo con actividades incluidas.",
+    "noteText": "La pieza oficial indica salida diaria para esta excursión."
+  },
+  "pc_buggies": {
+    "priceText": "Doble US$85 / Familiar US$140.",
+    "dateText": "Todos los días.",
+    "pickupText": "Traslado desde tu hotel en Punta Cana.",
+    "includesText": "Experiencia en buggies, baño en Macao, visita a cueva taína y casa típica.",
+    "noteText": "La promoción oficial publicada por la agencia indica salida diaria."
+  },
+  "pc_jet_ski_aqua_kart_polaris": {
+    "priceText": "US$169 por adulto.",
+    "dateText": "Promoción nueva.",
+    "pickupText": "Traslado desde tu hotel en Punta Cana.",
+    "includesText": "Combo con Jet Ski, Aqua Kart y Polaris según la pieza promocional de la agencia.",
+    "noteText": "La imagen oficial presenta esta excursión como paquete combinado."
+  },
+  "pc_jet_ski_aqua_kart": {
+    "priceText": "US$129 por adulto.",
+    "dateText": "Promoción nueva.",
+    "pickupText": "Traslado desde tu hotel en Punta Cana.",
+    "includesText": "Combo con Jet Ski y Aqua Kart según la promoción publicada por la agencia.",
+    "noteText": "La pieza oficial presenta esta excursión como paquete combinado."
+  },
+  "pc_boat_party": {
+    "priceText": "Adultos US$85 / Niños US$60.",
+    "dateText": "Todos los días.",
+    "pickupText": "Traslado desde tu hotel en Punta Cana.",
+    "includesText": "Paseo en barco, snorkel para corales y piscina natural según la promoción oficial.",
+    "noteText": "La imagen compartida por la agencia indica salida diaria para esta experiencia."
+  },
+  "marzo_santa_fe_full_day": {
+    "priceText": "RD$3,750 adultos / RD$3,300 niños.",
+    "dateText": "Domingos 01, 08, 15, 22 y 29 de marzo.",
+    "includesText": "Transporte, desayuno, almuerzo, piscina, city tours y visita a Calles de las Sombrillas.",
+    "noteText": "La promoción publicada corresponde a salidas dominicales dentro de la programación de marzo."
+  },
+  "marzo_rio_y_playas_san_juan": {
+    "priceText": "RD$2,899 por adulto.",
+    "dateText": "Domingos 15 y 29 de marzo.",
+    "includesText": "Transporte, desayuno, almuerzo, playa y visita a El Portón según la promoción oficial.",
+    "noteText": "La pieza oficial corresponde a la colección de marzo."
+  },
+  "marzo_parapente_jarabacoa": {
+    "priceText": "RD$4,950 por adulto.",
+    "dateText": "Domingos 15 y 29 de marzo.",
+    "includesText": "Transporte, desayuno, almuerzo, parapente, city tours y balnearios.",
+    "noteText": "La promoción publicada corresponde a salidas puntuales de marzo."
+  },
+  "marzo_ocean_world_confresi": {
+    "priceText": "RD$3,750 adultos / RD$3,250 niños.",
+    "dateText": "Domingos 01, 08, 15, 22 y 29 de marzo.",
+    "includesText": "Transporte, desayuno, almuerzo, piscina, city tours y experiencia en Ocean World.",
+    "noteText": "La pieza promocional indica niños de 0 a 3 años gratis."
+  },
+  "marzo_jarabacoa_fourwheel": {
+    "priceText": "RD$3,950 por adulto.",
+    "dateText": "01, 08, 15, 22 y 29 de marzo.",
+    "includesText": "Transporte, desayuno, almuerzo, Fourwheel, city tours y balnearios.",
+    "noteText": "La promoción oficial forma parte de la colección de marzo."
+  },
+  "marzo_jarabacoa_city_tours": {
+    "priceText": "RD$2,790 por adulto.",
+    "dateText": "Domingos 01, 08, 15, 22 y 29 de marzo.",
+    "includesText": "Transporte, desayuno, almuerzo, city tours y balnearios.",
+    "noteText": "La pieza publicada corresponde a salidas de marzo."
+  },
+  "marzo_jarabacoa_city_polaris": {
+    "priceText": "RD$4,950 por adulto.",
+    "dateText": "Domingos 01, 08, 15, 22 y 29 de marzo.",
+    "includesText": "Transporte, desayuno, almuerzo, Polaris y balnearios.",
+    "noteText": "La promoción publicada corresponde a la colección de marzo."
+  },
+  "marzo_isla_saona": {
+    "priceText": "Adultos RD$3,850 / Niños RD$3,400.",
+    "dateText": "Sábados 07, 14, 21 y 28 / Domingos 01, 08, 15, 22 y 29 de marzo.",
+    "includesText": "Transporte, desayuno, almuerzo, catamarán y piscina natural.",
+    "noteText": "La imagen promocional muestra programación ampliada durante marzo."
+  },
+  "marzo_fourwheel_punta_cana": {
+    "priceText": "RD$3,450 por adulto.",
+    "dateText": "Sábados 07, 14, 21 y 28 / Domingos 01, 08, 15, 22 y 29 de marzo.",
+    "includesText": "Transporte, desayuno, almuerzo, playa Macao, cueva taína y casa típica.",
+    "noteText": "La promoción indica 12+1 gratis para grupos."
+  },
+  "marzo_cayo_arena": {
+    "priceText": "RD$3,350 por adulto.",
+    "dateText": "Domingos 15 y 29 de marzo.",
+    "includesText": "Transporte, desayuno, almuerzo, playa, lancha rápida y manglares.",
+    "noteText": "La pieza oficial corresponde a una salida especial de marzo."
+  },
+  "marzo_ballenas_jorobadas": {
+    "priceText": "RD$3,950 por adulto.",
+    "dateText": "07, 08, 14, 15, 21 y 22 de marzo.",
+    "includesText": "Transporte, desayuno, almuerzo, lancha y visita a Cayo Levantado.",
+    "noteText": "La imagen promocional corresponde a la temporada de ballenas jorobadas."
+  },
+  "marzo_cayo_levantado": {
+    "priceText": "RD$2,950 por persona.",
+    "dateText": "07, 08, 14, 15, 21 y 22 de marzo.",
+    "includesText": "Transporte, desayuno, almuerzo y visita a Cayo Levantado.",
+    "noteText": "La pieza oficial la presenta como excursión especial de marzo."
+  },
+  "marzo_buggies_punta_cana": {
+    "priceText": "RD$3,299 por persona.",
+    "dateText": "Sábados 07, 14, 21 y 28 / Domingos 01, 08, 15, 22 y 29 de marzo.",
+    "includesText": "Transporte, desayuno, almuerzo, playa Macao, cueva taína y casa típica.",
+    "noteText": "La imagen promocional forma parte de la programación de marzo."
+  },
+  "ss_polaris": {
+    "priceText": "RD$4,750 por persona.",
+    "dateText": "04 y 05 de abril.",
+    "reserveText": "Reserva con 50%.",
+    "includesText": "Transporte, desayuno, almuerzo, Polaris y zipline.",
+    "noteText": "La pieza promocional compartida por la agencia corresponde a la colección de Semana Santa."
+  },
+  "ss_playa_dominicus": {
+    "priceText": "RD$2,550 adultos.",
+    "dateText": "Jueves 02 de abril.",
+    "includesText": "Transporte, desayuno, almuerzo, playa, letrero y experiencia en Playa Dominicus.",
+    "noteText": "La promoción oficial corresponde a una salida especial de Semana Santa."
+  },
+  "ss_jet_ski": {
+    "priceText": "RD$4,750 por persona.",
+    "dateText": "04 y 05 de abril.",
+    "reserveText": "Reserva con 50%.",
+    "includesText": "Transporte, desayuno, almuerzo, Jet Ski y zipline.",
+    "noteText": "La pieza oficial corresponde a la colección de Semana Santa."
+  },
+  "ss_isla_saona_2": {
+    "priceText": "Adultos RD$3,850 / Niños RD$3,350.",
+    "dateText": "04 y 05 de abril.",
+    "includesText": "Transporte, desayuno, almuerzo, barco, catamarán y piscina natural.",
+    "noteText": "La promoción publicada corresponde a la colección de Semana Santa."
+  },
+  "ss_isla_saona": {
+    "priceText": "RD$3,850 por persona.",
+    "dateText": "04 de abril.",
+    "includesText": "Transporte, desayuno, almuerzo, barco y catamarán.",
+    "noteText": "La pieza oficial muestra esta salida como súper promo de Semana Santa."
+  },
+  "ss_aqua_kart": {
+    "priceText": "RD$4,750 por persona.",
+    "dateText": "04 y 05 de abril.",
+    "reserveText": "Reserva con 50%.",
+    "includesText": "Transporte, desayuno, almuerzo, Aqua Kart y zipline.",
+    "noteText": "La pieza promocional corresponde a la colección de Semana Santa."
+  },
+  "ss_isla_catalina": {
+    "priceText": "Adultos RD$3,750 / Niños RD$3,150.",
+    "dateText": "Sábado 04 y domingo 05 de abril.",
+    "includesText": "Transporte, desayuno, almuerzo, catamarán y snorkel para corales.",
+    "noteText": "La imagen oficial publicada por la agencia corresponde a la colección de Semana Santa."
+  }
 };
+
 
 // =========================
 // REDIS
@@ -1878,29 +2060,50 @@ function serviceLineLabel(key) {
 
 function categoriesEmojiText() {
   return (
-    `🌴 *Tours en República Dominicana*\n\n` +
-    `Te acompaño a explorar nuestras colecciones de excursiones para que elijas la experiencia que más te guste:\n` +
-    `🏝️ Tours desde Punta Cana\n` +
-    `📆 Tours de Marzo\n` +
-    `⛪ Tours Semana Santa\n\n` +
-    `Selecciona la colección que deseas ver y te mostraré los tours disponibles con su imagen promocional y un resumen claro en texto.`
+    `🌴 *Tours en República Dominicana*
+
+` +
+    `Tenemos estas colecciones disponibles para ayudarte a elegir más fácil:
+` +
+    `🏝️ Tours desde Punta Cana
+` +
+    `📆 Tours de Marzo
+` +
+    `⛪ Tours Semana Santa
+
+` +
+    `Selecciona la colección que deseas explorar y te mostraré las excursiones disponibles.`
   );
 }
 
 function mainMenuText() {
   return (
-    `👋 ¡Bienvenido a *${BUSINESS_NAME}*! Soy tu asistente virtual de viajes.\n\n` +
-    `Estoy aquí para ayudarte a cotizar, comparar opciones y dejar tu solicitud casi lista para reserva y pago.\n\n` +
-    `Puedo ayudarte con:\n` +
-    `🌴 Tours en República Dominicana\n` +
-    `✈️ Boletos aéreos\n` +
-    `🏨 Solo hoteles\n` +
-    `🛡️ Seguros de viaje\n` +
-    `🚕 Traslados\n` +
-    `🎒 Paquetes vacacionales\n` +
-    `👤 Hablar con un asesor\n` +
-    `📍 Ubicación y contacto\n\n` +
-    `También puedes escribirme directamente *"Tours desde Punta Cana"*, *"Tours de Marzo"* o *"Tours Semana Santa"* y te mostraré la colección disponible con cada tour explicado de forma más clara.`
+    `👋 ¡Bienvenido a *${BUSINESS_NAME}*! Soy tu asistente virtual de viajes.
+
+` +
+    `Estoy aquí para ayudarte a cotizar, comparar opciones y dejar tu solicitud casi lista para reserva y pago.
+
+` +
+    `Puedo ayudarte con:
+` +
+    `🌴 Tours en República Dominicana
+` +
+    `✈️ Boletos aéreos
+` +
+    `🏨 Solo hoteles
+` +
+    `🛡️ Seguros de viaje
+` +
+    `🚕 Traslados
+` +
+    `🎒 Paquetes vacacionales
+` +
+    `👤 Hablar con un asesor
+` +
+    `📍 Ubicación y contacto
+
+` +
+    `También puedes escribirme directamente *"Tours desde Punta Cana"*, *"Tours de Marzo"* o *"Tours Semana Santa"* y te mostraré las excursiones disponibles en cada colección.`
   );
 }
 
@@ -1909,21 +2112,18 @@ function buildLocationContactText() {
   return (`📍 *Ubicación y contacto*\n\n` + `${addressLine}` + `${MARKET_CONTACT_TEXT}`).trim();
 }
 
-function getRealTourCollectionLabel(groupKey) {
-  return getRealTourGroupByKey(groupKey)?.title || "Colección de tours";
-}
 
 function getRealTourGroupIntro(groupKey) {
   if (groupKey === "tours_punta_cana") {
-    return "Te comparto nuestra selección de excursiones saliendo desde Punta Cana para que elijas la que mejor se adapte a tu viaje.";
+    return "Excursiones y actividades disponibles para disfrutar saliendo desde Punta Cana.";
   }
   if (groupKey === "tours_marzo") {
-    return "Aquí tienes las excursiones y promociones de marzo compartidas por la agencia para esta temporada.";
+    return "Selección de excursiones y promociones compartidas por la agencia para marzo.";
   }
   if (groupKey === "tours_semana_santa") {
-    return "Estas son las excursiones de Semana Santa que puedes consultar para planificar tu salida con tiempo.";
+    return "Opciones especiales de excursiones y actividades para Semana Santa.";
   }
-  return "Aquí tienes la colección de excursiones disponible en este momento.";
+  return "Estas son las excursiones disponibles en esta colección.";
 }
 
 function formatRealToursTextList(groupKey, session) {
@@ -1937,12 +2137,20 @@ function formatRealToursTextList(groupKey, session) {
   }
 
   return (
-    `🌴 *${group.title}*\n\n` +
-    `${getRealTourGroupIntro(groupKey)}\n\n` +
-    `Tours disponibles:\n\n` +
-    tours.map((t, i) => `${i + 1}. ${t.title}`).join("\n") +
-    `\n\nResponde con el *número* o con el *nombre* del tour que deseas ver.\n` +
-    `↩️ Escribe *atrás* para cambiar de colección o *menú* para volver al inicio.`
+    `🌴 *${group.title}*
+
+` +
+    `${getRealTourGroupIntro(groupKey)}
+
+` +
+    `Estas son las excursiones que puedes consultar en esta colección:
+
+` +
+    tours.map((t, i) => `${i + 1}. ${t.title}`).join("
+") +
+    `
+
+Responde con el *número* o con el *nombre* del tour que deseas ver.`
   );
 }
 
@@ -1966,23 +2174,24 @@ function parseRealTourChoice(session, userText) {
   return direct ? getRealTourByKey(direct) : null;
 }
 
-function isGoBack(textNorm) {
-  const t = normalizeText(textNorm || "");
-  return ["atras", "atrás", "volver", "regresar", "regresa", "volver atras", "volver atrás"].includes(t);
+
+function getRealTourTextDetails(tour) {
+  if (!tour) return null;
+  return REAL_TOUR_TEXT_OVERRIDES[tour.key] || null;
 }
 
 function inferRealTourExperienceText(title = "") {
   const t = normalizeText(title);
 
-  if (t.includes("isla saona")) return "Excursión de día a isla con ambiente caribeño, playa y experiencia de paseo.";
-  if (t.includes("isla catalina")) return "Excursión de isla ideal para disfrutar playa, mar y día completo.";
-  if (t.includes("boat party")) return "Experiencia en barco ideal para quienes buscan música, animación y ambiente de fiesta.";
-  if (t.includes("buggies")) return "Aventura todoterreno para quienes disfrutan recorridos llenos de adrenalina.";
-  if (t.includes("fourwheel")) return "Actividad en fourwheel pensada para una experiencia de aventura y ruta.";
-  if (t.includes("polaris")) return "Experiencia de aventura en Polaris con enfoque dinámico y al aire libre.";
+  if (t.includes("isla saona")) return "Excursión de playa con ambiente caribeño, navegación y experiencia de día completo.";
+  if (t.includes("isla catalina")) return "Excursión de isla ideal para disfrutar playa, mar y actividades acuáticas.";
+  if (t.includes("boat party")) return "Paseo en barco con ambiente animado, mar y actividades recreativas.";
+  if (t.includes("buggies")) return "Aventura todoterreno ideal para quienes disfrutan recorridos con adrenalina.";
+  if (t.includes("fourwheel")) return "Experiencia de aventura en Fourwheel con recorrido dinámico al aire libre.";
+  if (t.includes("polaris")) return "Experiencia en Polaris pensada para quienes buscan una salida activa y divertida.";
   if (t.includes("jet ski")) return "Actividad acuática ideal para quienes buscan velocidad y diversión sobre el mar.";
   if (t.includes("aqua kart")) return "Experiencia acuática con enfoque de aventura y entretenimiento.";
-  if (t.includes("horseback")) return "Paseo a caballo ideal para disfrutar un recorrido relajado con vista natural.";
+  if (t.includes("horseback")) return "Paseo a caballo ideal para disfrutar un recorrido natural y relajado.";
   if (t.includes("dolphin")) return "Experiencia recreativa ideal para compartir en familia y vivir una actividad diferente.";
   if (t.includes("coco bongo")) return "Salida de entretenimiento perfecta para quienes desean disfrutar un show y vida nocturna.";
   if (t.includes("cayo")) return "Excursión de playa pensada para disfrutar mar, relax y ambiente tropical.";
@@ -1991,28 +2200,24 @@ function inferRealTourExperienceText(title = "") {
   if (t.includes("ballenas")) return "Experiencia de temporada ideal para quienes desean una salida especial de observación.";
   if (t.includes("rio")) return "Excursión de naturaleza con combinación de agua, descanso y recorrido.";
   if (t.includes("city")) return "Recorrido ideal para quienes desean combinar paseo, puntos de interés y experiencia local.";
-  if (t.includes("ocean world")) return "Experiencia recreativa ideal para compartir en grupo o familia.";
+  if (t.includes("ocean world")) return "Experiencia recreativa ideal para compartir en grupo o en familia.";
   if (t.includes("scoobadoo")) return "Actividad turística ideal para quienes desean una experiencia divertida y diferente.";
   if (t.includes("santa fe")) return "Escapada full day para disfrutar relax, paseo y actividades incluidas.";
   return "Excursión disponible en esta colección para que elijas la opción que mejor conecte con tu viaje.";
 }
 
-function getRealTourTextDetails(tour) {
-  if (!tour) return null;
-  return REAL_TOUR_TEXT_OVERRIDES[tour.key] || null;
-}
-
 function buildRealTourReserveHint() {
   return (
-    `📲 Si esta excursión te interesa, respóndeme con la *fecha* o *salida* que prefieres y te pediré tus datos para dejar la solicitud casi lista para confirmación y pago.\n` +
+    `📲 Si esta excursión te interesa, respóndeme con la *fecha* o *salida* que prefieres y te pediré tus datos para dejar la solicitud casi lista para confirmación y pago.
+` +
     `↩️ Escribe *atrás* para volver al listado de tours o *menú* para ver todos los servicios.`
   );
 }
 
 function buildRealTourInfoText(tour) {
   const details = getRealTourTextDetails(tour) || {};
-  const lines = [`🌴 *${tour?.title || "Tour"}*`];
   const groupKey = tour?.groupKey || "";
+  const lines = [`🌴 *${tour?.title || "Tour"}*`];
 
   if (details.priceText) {
     lines.push(`💵 ${details.priceText}`);
@@ -2022,40 +2227,28 @@ function buildRealTourInfoText(tour) {
 
   if (details.durationText) {
     lines.push(`⏳ ${details.durationText}`);
-  } else {
-    lines.push(`⏳ Duración: la agencia confirmará la duración exacta según la salida de este tour.`);
   }
 
   if (details.dateText) {
     lines.push(`📅 ${details.dateText}`);
   } else if (groupKey === "tours_marzo") {
-    lines.push(`📅 Salida correspondiente a la colección de *Marzo* publicada por la agencia.`);
+    lines.push(`📅 Salida correspondiente a la colección de marzo publicada por la agencia.`);
   } else if (groupKey === "tours_semana_santa") {
-    lines.push(`📅 Salida correspondiente a la colección de *Semana Santa* publicada por la agencia.`);
+    lines.push(`📅 Salida correspondiente a la colección de Semana Santa publicada por la agencia.`);
   } else {
     lines.push(`📅 Fecha / salida: consulta la disponibilidad o la fecha mostrada en la imagen del tour.`);
-  }
-
-  if (details.meetingPointText) {
-    lines.push(`📍 ${details.meetingPointText}`);
-  } else if (groupKey === "tours_punta_cana") {
-    lines.push(`📍 Salida general: excursión disponible desde Punta Cana.`);
-  } else {
-    lines.push(`📍 Punto de salida: será confirmado por la agencia según el tour elegido.`);
   }
 
   if (details.pickupText) {
     lines.push(`🚐 ${details.pickupText}`);
   } else if (groupKey === "tours_punta_cana") {
-    lines.push(`🚐 Pickup: disponible según la ruta o punto de encuentro coordinado en Punta Cana.`);
-  } else {
-    lines.push(`🚐 Pickup / encuentro: la agencia te confirmará el punto exacto al gestionar tu solicitud.`);
+    lines.push(`🚐 Pickup / salida: disponible desde Punta Cana según coordinación de la agencia.`);
   }
 
   if (details.includesText) {
     lines.push(`✅ ${details.includesText}`);
   } else {
-    lines.push(`✅ Experiencia: ${inferRealTourExperienceText(tour?.title || "")}`);
+    lines.push(`✅ ${inferRealTourExperienceText(tour?.title || "")}`);
   }
 
   if (details.paymentText) {
@@ -2067,7 +2260,7 @@ function buildRealTourInfoText(tour) {
   if (details.reserveText) {
     lines.push(`📌 ${details.reserveText}`);
   } else {
-    lines.push(`📌 Reserva: la solicitud queda registrada para que el asesor te contacte y cierre la confirmación.`);
+    lines.push(`📌 Reserva: la solicitud queda registrada para que un asesor te contacte y cierre la confirmación.`);
   }
 
   if (details.noteText) {
@@ -2076,16 +2269,11 @@ function buildRealTourInfoText(tour) {
     lines.push(`🖼️ La imagen que recibiste contiene la información promocional oficial compartida por la agencia.`);
   }
 
-  if (Array.isArray(details.extraTextLines)) {
-    for (const extra of details.extraTextLines) {
-      if (extra) lines.push(String(extra));
-    }
-  }
-
   lines.push("");
   lines.push(buildRealTourReserveHint());
 
-  return lines.join("\n");
+  return lines.join("
+");
 }
 
 function buildRealTourLeadSummary(session, phoneDigits) {
@@ -2111,18 +2299,17 @@ function buildRealTourLeadSummary(session, phoneDigits) {
 // WhatsApp send helpers
 // =========================
 async function sendWhatsAppText(to, text, reportSource = "BOT") {
-  const finalText = addDefaultNavHint(text, reportSource);
   const url = `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`;
   await axios.post(
     url,
-    { messaging_product: "whatsapp", to, type: "text", text: { body: finalText } },
+    { messaging_product: "whatsapp", to, type: "text", text: { body: text } },
     { headers: { Authorization: `Bearer ${WA_TOKEN}` } }
   );
 
   await bothubReportMessage({
     direction: "OUTBOUND",
     to: String(to),
-    body: String(finalText),
+    body: String(text),
     source: reportSource,
     kind: "TEXT",
   });
@@ -2307,10 +2494,10 @@ async function sendRealTourGroupsList(to) {
       type: "interactive",
       interactive: {
         type: "list",
-        header: { type: "text", text: "Colecciones de excursiones" },
-        body: { text: "Selecciona la temporada o colección que deseas explorar 👇" },
+        header: { type: "text", text: "Colecciones de tours" },
+        body: { text: "Selecciona la temporada o colección de excursiones que deseas ver 👇" },
         footer: { text: BUSINESS_NAME },
-        action: { button: "Ver colecciones", sections: [{ title: "Temporadas y colecciones", rows }] },
+        action: { button: "Ver colecciones", sections: [{ title: "Colecciones disponibles", rows }] },
       },
     },
     { headers: { Authorization: `Bearer ${WA_TOKEN}` } }
@@ -2325,7 +2512,11 @@ async function sendRealToursByGroup(to, groupKey, session) {
 async function sendRealTourPresentation(to, tour) {
   if (!tour) return;
   if (tour.imageUrl) {
-    await sendWhatsAppImage(to, tour.imageUrl, `🌴 ${tour.title}`);
+    await sendWhatsAppImage(
+      to,
+      tour.imageUrl,
+      `🌴 *${tour.title}*\n📸 Imagen oficial enviada por la agencia\n📍 Revisa la pieza para ver la información comercial publicada del tour`
+    );
   }
   await sendWhatsAppText(to, buildRealTourInfoText(tour));
 }
@@ -3199,11 +3390,6 @@ app.post("/webhook", async (req, res) => {
       tNorm.includes("hotel") ||
       tNorm.includes("traslado");
 
-    if (session.greeted && session.state === "idle" && session.lead?.quotePreview && session.lead?.converted && isThanks(tNorm)) {
-      await sendWhatsAppText(from, buildLeadAlreadyRegisteredReply());
-      return res.sendStatus(200);
-    }
-
     if (session.greeted && session.state === "idle" && isGreeting(tNorm) && !hasEarlyIntent) {
       await sendWhatsAppText(from, quickHelpText());
       return res.sendStatus(200);
@@ -3227,58 +3413,6 @@ app.post("/webhook", async (req, res) => {
       await sendWhatsAppText(from, mainMenuText());
       await sendServiceLinesList(from);
       return res.sendStatus(200);
-    }
-
-    if (isGoBack(tNorm)) {
-      const realTourIntakeStates = [
-        "await_real_tour_date",
-        "await_real_tour_adults",
-        "await_real_tour_children",
-        "await_real_tour_pickup",
-        "await_real_tour_city",
-        "await_real_tour_name",
-        "await_real_tour_phone",
-      ];
-
-      if (realTourIntakeStates.includes(session.state) && session.pendingRealTourGroup) {
-        session.state = "await_real_tour_choice";
-        session.pendingRealTourKey = null;
-        session.pendingDesiredDate = null;
-        session.pendingAdults = null;
-        session.pendingChildren = null;
-        session.pendingPickup = null;
-        session.pendingCity = null;
-        session.pendingName = null;
-        await sendWhatsAppText(
-          from,
-          `↩️ Perfecto. Volviste al listado de tours de *${getRealTourCollectionLabel(session.pendingRealTourGroup)}*.`
-        );
-        await sendRealToursByGroup(from, session.pendingRealTourGroup, session);
-        return res.sendStatus(200);
-      }
-
-      if (session.state === "await_real_tour_choice") {
-        session.state = "await_tour_group";
-        session.pendingRealTourKey = null;
-        session.pendingDesiredDate = null;
-        await sendWhatsAppText(from, `↩️ Perfecto. Volviste al listado de colecciones de tours.`);
-        await sendRealTourGroupsList(from);
-        return res.sendStatus(200);
-      }
-
-      if (session.state === "await_tour_group" || session.pendingServiceLine === "tours_rd") {
-        clearIntakeFlow(session);
-        await sendWhatsAppText(from, mainMenuText());
-        await sendServiceLinesList(from);
-        return res.sendStatus(200);
-      }
-
-      if (session.state !== "idle") {
-        clearIntakeFlow(session);
-        await sendWhatsAppText(from, mainMenuText());
-        await sendServiceLinesList(from);
-        return res.sendStatus(200);
-      }
     }
 
     if (detectCatalogRequest(tNorm)) {
@@ -3379,7 +3513,7 @@ app.post("/webhook", async (req, res) => {
       if (!groupKey) {
         await sendWhatsAppText(
           from,
-          `Perfecto 🌴\nTe compartiré nuestras colecciones de excursiones para que elijas la que más te interese.\n\nOpciones disponibles:\n• Tours desde Punta Cana\n• Tours de Marzo\n• Tours Semana Santa\n\n↩️ También puedes escribir *menú* para volver al inicio.`
+          `Perfecto 🌴\nTe compartiré nuestras colecciones de excursiones disponibles.\n\nElige una de estas opciones:\n• Tours desde Punta Cana\n• Tours de Marzo\n• Tours Semana Santa`
         );
         await sendRealTourGroupsList(from);
         return res.sendStatus(200);
@@ -3404,7 +3538,7 @@ app.post("/webhook", async (req, res) => {
       if (!pickedTour) {
         await sendWhatsAppText(
           from,
-          `No pude identificar el tour 🙏\nResponde con el *número* o con el *nombre* exacto del tour.\n↩️ Escribe *atrás* para cambiar de colección.`
+          `No pude identificar el tour 🙏\nResponde con el *número* o con el *nombre* exacto del tour.`
         );
         return res.sendStatus(200);
       }
@@ -3422,7 +3556,7 @@ app.post("/webhook", async (req, res) => {
       await sendRealTourPresentation(from, pickedTour);
       await sendWhatsAppText(
         from,
-        `📅 Ahora dime la *fecha* o *salida* que te interesa para *${pickedTour.title}*.\nEj: "sábado", "15 de abril", "domingo" o "semana santa".`
+        `📅 Ahora dime la *fecha* que te interesa para *${pickedTour.title}*.\nEj: "sábado", "15 de abril", "domingo" o "semana santa".`
       );
       return res.sendStatus(200);
     }
@@ -3508,7 +3642,14 @@ app.post("/webhook", async (req, res) => {
       await handoffToHumanTool({ summary: summaryText });
       await notifyPersonalWhatsAppLeadSummary(summaryText, phoneDigits);
 
-      markLeadRegistered(session, summaryText, session.pendingRealTourKey || "");
+      session.lead = {
+        ...defaultLead(),
+        tour_key: session.pendingRealTourKey || "",
+        followupSent: true,
+        converted: true,
+        quotePreview: summaryText,
+        lastInteractionAt: new Date().toISOString(),
+      };
 
       await sendWhatsAppText(
         from,
@@ -3818,7 +3959,7 @@ app.post("/webhook", async (req, res) => {
         { label: "📞 Tel", value: phoneDigits || "—" },
       ]);
 
-      markLeadRegistered(session, summaryText);
+      updateLead(session, { tour_key: "", quotePreview: summaryText, converted: false, followupSent: false });
       await handoffToHumanTool({ summary: summaryText });
       await notifyPersonalWhatsAppLeadSummary(summaryText, phoneDigits);
 
@@ -3921,7 +4062,7 @@ app.post("/webhook", async (req, res) => {
         { label: "📞 Tel", value: phoneDigits || "—" },
       ]);
 
-      markLeadRegistered(session, summaryText);
+      updateLead(session, { tour_key: "", quotePreview: summaryText, converted: false, followupSent: false });
       await handoffToHumanTool({ summary: summaryText });
       await notifyPersonalWhatsAppLeadSummary(summaryText, phoneDigits);
 
@@ -4013,7 +4154,7 @@ app.post("/webhook", async (req, res) => {
         { label: "📞 Tel", value: phoneDigits || "—" },
       ]);
 
-      markLeadRegistered(session, summaryText);
+      updateLead(session, { tour_key: "", quotePreview: summaryText, converted: false, followupSent: false });
       await handoffToHumanTool({ summary: summaryText });
       await notifyPersonalWhatsAppLeadSummary(summaryText, phoneDigits);
 
@@ -4091,7 +4232,7 @@ app.post("/webhook", async (req, res) => {
         { label: "📞 Tel", value: phoneDigits || "—" },
       ]);
 
-      markLeadRegistered(session, summaryText);
+      updateLead(session, { tour_key: "", quotePreview: summaryText, converted: false, followupSent: false });
       await handoffToHumanTool({ summary: summaryText });
       await notifyPersonalWhatsAppLeadSummary(summaryText, phoneDigits);
 
@@ -4189,7 +4330,7 @@ app.post("/webhook", async (req, res) => {
         { label: "📞 Tel", value: phoneDigits || "—" },
       ]);
 
-      markLeadRegistered(session, summaryText);
+      updateLead(session, { tour_key: "", quotePreview: summaryText, converted: false, followupSent: false });
       await handoffToHumanTool({ summary: summaryText });
       await notifyPersonalWhatsAppLeadSummary(summaryText, phoneDigits);
 
@@ -4243,7 +4384,7 @@ app.post("/webhook", async (req, res) => {
         { label: "📞 Tel", value: phoneDigits || "—" },
       ]);
 
-      markLeadRegistered(session, summaryText);
+      updateLead(session, { tour_key: "", quotePreview: summaryText, converted: false, followupSent: false });
       await handoffToHumanTool({ summary: summaryText });
       await notifyPersonalWhatsAppLeadSummary(summaryText, phoneDigits);
 
@@ -4278,7 +4419,8 @@ app.post("/webhook", async (req, res) => {
       session.pendingServiceLine = "tours_rd";
       session.pendingRealTourGroup = directRealTourGroup;
       session.state = "await_real_tour_choice";
-      await sendWhatsAppText(from, `Perfecto 🌴\nTe muestro la colección *${getRealTourGroupByKey(directRealTourGroup)?.title || "Tours"}* para que revises cada excursión con más claridad.`);
+      await sendWhatsAppText(from, `Perfecto 🌴
+Aquí tienes las excursiones disponibles en *${getRealTourGroupByKey(directRealTourGroup)?.title || "Tours"}*.`);
       await sendRealToursByGroup(from, directRealTourGroup, session);
       return res.sendStatus(200);
     }
