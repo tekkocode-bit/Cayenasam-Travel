@@ -1,4 +1,3 @@
-
 import express from "express";
 import axios from "axios";
 import crypto from "crypto";
@@ -81,6 +80,42 @@ function normalizeText(t) {
     .replace(/\p{Diacritic}/gu, "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function addDefaultNavHint(text, reportSource = "BOT") {
+  const body = String(text || "").trim();
+  if (!body) return body;
+  if (reportSource !== "BOT") return body;
+
+  const skip =
+    body.includes("↩️ Escribe *atrás*") ||
+    body.includes("Selecciona el servicio que te interesa 👇") ||
+    body.includes("Selecciona la temporada o colección") ||
+    body.includes("Elige una opción del menú") ||
+    body.includes("👋 ¡Bienvenido a") ||
+    body.includes("¡Hola! 😊\nPuedo ayudarte con");
+
+  if (skip) return body;
+  return `${body}\n\n↩️ Escribe *atrás* para volver o *menú* para ir al inicio.`;
+}
+
+function buildLeadAlreadyRegisteredReply() {
+  return (
+    `✅ Tu solicitud ya quedó registrada.\n\n` +
+    `Un asesor de la agencia te contactará para continuar con la confirmación y el pago.\n\n` +
+    `Si deseas seguir explorando opciones, escribe *menú*.`
+  );
+}
+
+function markLeadRegistered(session, summaryText, tourKey = "") {
+  session.lead = {
+    ...defaultLead(),
+    tour_key: tourKey || "",
+    quotePreview: summaryText || "",
+    converted: true,
+    followupSent: true,
+    lastInteractionAt: new Date().toISOString(),
+  };
 }
 
 // =========================
@@ -435,12 +470,16 @@ const REAL_TOUR_TEXT_OVERRIDES = {
   pc_scoobadoo: {
     priceText: "Desde US$85 por adulto.",
     dateText: "Todos los días.",
-    includesText: "Traslado desde tu hotel, experiencia Scoobadoo sumergible, snorkel para ver corales, barco panorámico y snack incluido.",
+    includesText:
+      "Traslado desde tu hotel, experiencia Scoobadoo sumergible, snorkel para ver corales, barco panorámico y snack incluido.",
+    pickupText: "Disponible saliendo desde Punta Cana.",
+    paymentText: "Reserva sujeta a confirmación con la agencia.",
   },
   marzo_santa_fe_full_day: {
     priceText: "RD$3,750 adultos / RD$3,300 niños.",
     dateText: "Domingos 01, 08, 15, 22 y 29 de marzo.",
     includesText: "Transporte, desayuno, almuerzo, piscina, city tours y visita a Calles de las Sombrillas.",
+    paymentText: "Reserva sujeta a confirmación con la agencia.",
   },
   ss_polaris: {
     dateText: "04 y 05 de abril.",
@@ -1839,49 +1878,28 @@ function serviceLineLabel(key) {
 
 function categoriesEmojiText() {
   return (
-    `🌴 *Tours en República Dominicana*
-
-` +
-    `Te acompaño a explorar nuestras colecciones de excursiones para que elijas la experiencia que más te guste:
-` +
-    `🏝️ Tours desde Punta Cana
-` +
-    `📆 Tours de Marzo
-` +
-    `⛪ Tours Semana Santa
-
-` +
+    `🌴 *Tours en República Dominicana*\n\n` +
+    `Te acompaño a explorar nuestras colecciones de excursiones para que elijas la experiencia que más te guste:\n` +
+    `🏝️ Tours desde Punta Cana\n` +
+    `📆 Tours de Marzo\n` +
+    `⛪ Tours Semana Santa\n\n` +
     `Selecciona la colección que deseas ver y te mostraré los tours disponibles con su imagen promocional y un resumen claro en texto.`
   );
 }
 
 function mainMenuText() {
   return (
-    `👋 ¡Bienvenido a *${BUSINESS_NAME}*! Soy tu asistente virtual de viajes.
-
-` +
-    `Estoy aquí para ayudarte a cotizar, comparar opciones y dejar tu solicitud casi lista para reserva y pago.
-
-` +
-    `Puedo ayudarte con:
-` +
-    `🌴 Tours en República Dominicana
-` +
-    `✈️ Boletos aéreos
-` +
-    `🏨 Solo hoteles
-` +
-    `🛡️ Seguros de viaje
-` +
-    `🚕 Traslados
-` +
-    `🎒 Paquetes vacacionales
-` +
-    `👤 Hablar con un asesor
-` +
-    `📍 Ubicación y contacto
-
-` +
+    `👋 ¡Bienvenido a *${BUSINESS_NAME}*! Soy tu asistente virtual de viajes.\n\n` +
+    `Estoy aquí para ayudarte a cotizar, comparar opciones y dejar tu solicitud casi lista para reserva y pago.\n\n` +
+    `Puedo ayudarte con:\n` +
+    `🌴 Tours en República Dominicana\n` +
+    `✈️ Boletos aéreos\n` +
+    `🏨 Solo hoteles\n` +
+    `🛡️ Seguros de viaje\n` +
+    `🚕 Traslados\n` +
+    `🎒 Paquetes vacacionales\n` +
+    `👤 Hablar con un asesor\n` +
+    `📍 Ubicación y contacto\n\n` +
     `También puedes escribirme directamente *"Tours desde Punta Cana"*, *"Tours de Marzo"* o *"Tours Semana Santa"* y te mostraré la colección disponible con cada tour explicado de forma más clara.`
   );
 }
@@ -1890,7 +1908,6 @@ function buildLocationContactText() {
   const addressLine = BUSINESS_ADDRESS ? `📍 Dirección: ${BUSINESS_ADDRESS}\n` : "";
   return (`📍 *Ubicación y contacto*\n\n` + `${addressLine}` + `${MARKET_CONTACT_TEXT}`).trim();
 }
-
 
 function getRealTourCollectionLabel(groupKey) {
   return getRealTourGroupByKey(groupKey)?.title || "Colección de tours";
@@ -1920,20 +1937,12 @@ function formatRealToursTextList(groupKey, session) {
   }
 
   return (
-    `🌴 *${group.title}*
-
-` +
-    `${getRealTourGroupIntro(groupKey)}
-
-` +
-    `Tours disponibles:
-
-` +
+    `🌴 *${group.title}*\n\n` +
+    `${getRealTourGroupIntro(groupKey)}\n\n` +
+    `Tours disponibles:\n\n` +
     tours.map((t, i) => `${i + 1}. ${t.title}`).join("\n") +
-    `
-
-Responde con el *número* o con el *nombre* del tour que deseas ver.
-↩️ Escribe *atrás* para cambiar de colección o *menú* para volver al inicio.`
+    `\n\nResponde con el *número* o con el *nombre* del tour que deseas ver.\n` +
+    `↩️ Escribe *atrás* para cambiar de colección o *menú* para volver al inicio.`
   );
 }
 
@@ -1956,7 +1965,6 @@ function parseRealTourChoice(session, userText) {
   const direct = detectRealTourKeyFromUser(userText);
   return direct ? getRealTourByKey(direct) : null;
 }
-
 
 function isGoBack(textNorm) {
   const t = normalizeText(textNorm || "");
@@ -2004,55 +2012,74 @@ function buildRealTourReserveHint() {
 function buildRealTourInfoText(tour) {
   const details = getRealTourTextDetails(tour) || {};
   const lines = [`🌴 *${tour?.title || "Tour"}*`];
-
-  if (details.summaryIntro) {
-    lines.push(details.summaryIntro);
-  }
+  const groupKey = tour?.groupKey || "";
 
   if (details.priceText) {
     lines.push(`💵 ${details.priceText}`);
+  } else {
+    lines.push(`💵 Precio: revisa el valor publicado en la imagen del tour o solicita confirmación con la agencia.`);
   }
 
   if (details.durationText) {
     lines.push(`⏳ ${details.durationText}`);
+  } else {
+    lines.push(`⏳ Duración: la agencia confirmará la duración exacta según la salida de este tour.`);
   }
 
   if (details.dateText) {
     lines.push(`📅 ${details.dateText}`);
+  } else if (groupKey === "tours_marzo") {
+    lines.push(`📅 Salida correspondiente a la colección de *Marzo* publicada por la agencia.`);
+  } else if (groupKey === "tours_semana_santa") {
+    lines.push(`📅 Salida correspondiente a la colección de *Semana Santa* publicada por la agencia.`);
+  } else {
+    lines.push(`📅 Fecha / salida: consulta la disponibilidad o la fecha mostrada en la imagen del tour.`);
   }
 
   if (details.meetingPointText) {
     lines.push(`📍 ${details.meetingPointText}`);
+  } else if (groupKey === "tours_punta_cana") {
+    lines.push(`📍 Salida general: excursión disponible desde Punta Cana.`);
+  } else {
+    lines.push(`📍 Punto de salida: será confirmado por la agencia según el tour elegido.`);
   }
 
   if (details.pickupText) {
     lines.push(`🚐 ${details.pickupText}`);
+  } else if (groupKey === "tours_punta_cana") {
+    lines.push(`🚐 Pickup: disponible según la ruta o punto de encuentro coordinado en Punta Cana.`);
+  } else {
+    lines.push(`🚐 Pickup / encuentro: la agencia te confirmará el punto exacto al gestionar tu solicitud.`);
   }
 
   if (details.includesText) {
     lines.push(`✅ ${details.includesText}`);
+  } else {
+    lines.push(`✅ Experiencia: ${inferRealTourExperienceText(tour?.title || "")}`);
   }
 
   if (details.paymentText) {
     lines.push(`💳 ${details.paymentText}`);
+  } else {
+    lines.push(`💳 Pago: sujeto a validación final por parte de la agencia al momento de confirmar.`);
   }
 
   if (details.reserveText) {
     lines.push(`📌 ${details.reserveText}`);
+  } else {
+    lines.push(`📌 Reserva: la solicitud queda registrada para que el asesor te contacte y cierre la confirmación.`);
   }
 
   if (details.noteText) {
     lines.push(`📝 ${details.noteText}`);
+  } else {
+    lines.push(`🖼️ La imagen que recibiste contiene la información promocional oficial compartida por la agencia.`);
   }
 
   if (Array.isArray(details.extraTextLines)) {
     for (const extra of details.extraTextLines) {
       if (extra) lines.push(String(extra));
     }
-  }
-
-  if (lines.length === 1) {
-    lines.push(`📸 Revisa la imagen del tour para ver el precio, las fechas y los detalles publicados por la agencia.`);
   }
 
   lines.push("");
@@ -2084,17 +2111,18 @@ function buildRealTourLeadSummary(session, phoneDigits) {
 // WhatsApp send helpers
 // =========================
 async function sendWhatsAppText(to, text, reportSource = "BOT") {
+  const finalText = addDefaultNavHint(text, reportSource);
   const url = `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`;
   await axios.post(
     url,
-    { messaging_product: "whatsapp", to, type: "text", text: { body: text } },
+    { messaging_product: "whatsapp", to, type: "text", text: { body: finalText } },
     { headers: { Authorization: `Bearer ${WA_TOKEN}` } }
   );
 
   await bothubReportMessage({
     direction: "OUTBOUND",
     to: String(to),
-    body: String(text),
+    body: String(finalText),
     source: reportSource,
     kind: "TEXT",
   });
@@ -2297,7 +2325,7 @@ async function sendRealToursByGroup(to, groupKey, session) {
 async function sendRealTourPresentation(to, tour) {
   if (!tour) return;
   if (tour.imageUrl) {
-    await sendWhatsAppImage(to, tour.imageUrl, `🌴 *${tour.title}*`);
+    await sendWhatsAppImage(to, tour.imageUrl, `🌴 ${tour.title}`);
   }
   await sendWhatsAppText(to, buildRealTourInfoText(tour));
 }
@@ -3171,6 +3199,11 @@ app.post("/webhook", async (req, res) => {
       tNorm.includes("hotel") ||
       tNorm.includes("traslado");
 
+    if (session.greeted && session.state === "idle" && session.lead?.quotePreview && session.lead?.converted && isThanks(tNorm)) {
+      await sendWhatsAppText(from, buildLeadAlreadyRegisteredReply());
+      return res.sendStatus(200);
+    }
+
     if (session.greeted && session.state === "idle" && isGreeting(tNorm) && !hasEarlyIntent) {
       await sendWhatsAppText(from, quickHelpText());
       return res.sendStatus(200);
@@ -3389,7 +3422,7 @@ app.post("/webhook", async (req, res) => {
       await sendRealTourPresentation(from, pickedTour);
       await sendWhatsAppText(
         from,
-        `📅 Ahora dime la *fecha* o *salida* que te interesa para *${pickedTour.title}*.\nEj: "sábado", "15 de abril", "domingo" o "semana santa".\n↩️ Escribe *atrás* para volver al listado de tours.`
+        `📅 Ahora dime la *fecha* o *salida* que te interesa para *${pickedTour.title}*.\nEj: "sábado", "15 de abril", "domingo" o "semana santa".`
       );
       return res.sendStatus(200);
     }
@@ -3401,7 +3434,7 @@ app.post("/webhook", async (req, res) => {
       }
       session.pendingDesiredDate = userText;
       session.state = "await_real_tour_adults";
-      await sendWhatsAppText(from, `Perfecto 👍\n¿Cuántos *adultos* viajarían?\n↩️ Escribe *atrás* para volver al tour anterior.`);
+      await sendWhatsAppText(from, `Perfecto 👍\n¿Cuántos *adultos* viajarían?`);
       return res.sendStatus(200);
     }
 
@@ -3413,7 +3446,7 @@ app.post("/webhook", async (req, res) => {
       }
       session.pendingAdults = count;
       session.state = "await_real_tour_children";
-      await sendWhatsAppText(from, `Gracias. Ahora dime cuántos *niños* viajarían. Si no van niños, responde *0*.\n↩️ Escribe *atrás* para volver.`);
+      await sendWhatsAppText(from, `Gracias. Ahora dime cuántos *niños* viajarían. Si no van niños, responde *0*.`);
       return res.sendStatus(200);
     }
 
@@ -3425,7 +3458,7 @@ app.post("/webhook", async (req, res) => {
       }
       session.pendingChildren = count;
       session.state = "await_real_tour_pickup";
-      await sendWhatsAppText(from, `Perfecto.\nAhora dime tu *punto de salida o pickup*.\n↩️ Escribe *atrás* para volver.`);
+      await sendWhatsAppText(from, `Perfecto.\nAhora dime tu *punto de salida o pickup*.`);
       return res.sendStatus(200);
     }
 
@@ -3436,7 +3469,7 @@ app.post("/webhook", async (req, res) => {
       }
       session.pendingPickup = userText;
       session.state = "await_real_tour_city";
-      await sendWhatsAppText(from, `Gracias. Ahora dime tu *ciudad*.\n↩️ Escribe *atrás* para volver.`);
+      await sendWhatsAppText(from, `Gracias. Ahora dime tu *ciudad*.`);
       return res.sendStatus(200);
     }
 
@@ -3447,7 +3480,7 @@ app.post("/webhook", async (req, res) => {
       }
       session.pendingCity = userText;
       session.state = "await_real_tour_name";
-      await sendWhatsAppText(from, `Perfecto ✅\nAhora indícame tu *nombre completo*.\n↩️ Escribe *atrás* para volver.`);
+      await sendWhatsAppText(from, `Perfecto ✅\nAhora indícame tu *nombre completo*.`);
       return res.sendStatus(200);
     }
 
@@ -3458,7 +3491,7 @@ app.post("/webhook", async (req, res) => {
       }
       session.pendingName = userText;
       session.state = "await_real_tour_phone";
-      await sendWhatsAppText(from, `Gracias. Ahora envíame tu *número de teléfono* para dejar la solicitud lista.\n↩️ Escribe *atrás* para volver.`);
+      await sendWhatsAppText(from, `Gracias. Ahora envíame tu *número de teléfono* para dejar la solicitud lista.`);
       return res.sendStatus(200);
     }
 
@@ -3475,14 +3508,7 @@ app.post("/webhook", async (req, res) => {
       await handoffToHumanTool({ summary: summaryText });
       await notifyPersonalWhatsAppLeadSummary(summaryText, phoneDigits);
 
-      session.lead = {
-        ...defaultLead(),
-        tour_key: session.pendingRealTourKey || "",
-        followupSent: true,
-        converted: true,
-        quotePreview: summaryText,
-        lastInteractionAt: new Date().toISOString(),
-      };
+      markLeadRegistered(session, summaryText, session.pendingRealTourKey || "");
 
       await sendWhatsAppText(
         from,
@@ -3792,7 +3818,7 @@ app.post("/webhook", async (req, res) => {
         { label: "📞 Tel", value: phoneDigits || "—" },
       ]);
 
-      updateLead(session, { tour_key: "", quotePreview: summaryText, converted: false, followupSent: false });
+      markLeadRegistered(session, summaryText);
       await handoffToHumanTool({ summary: summaryText });
       await notifyPersonalWhatsAppLeadSummary(summaryText, phoneDigits);
 
@@ -3895,7 +3921,7 @@ app.post("/webhook", async (req, res) => {
         { label: "📞 Tel", value: phoneDigits || "—" },
       ]);
 
-      updateLead(session, { tour_key: "", quotePreview: summaryText, converted: false, followupSent: false });
+      markLeadRegistered(session, summaryText);
       await handoffToHumanTool({ summary: summaryText });
       await notifyPersonalWhatsAppLeadSummary(summaryText, phoneDigits);
 
@@ -3987,7 +4013,7 @@ app.post("/webhook", async (req, res) => {
         { label: "📞 Tel", value: phoneDigits || "—" },
       ]);
 
-      updateLead(session, { tour_key: "", quotePreview: summaryText, converted: false, followupSent: false });
+      markLeadRegistered(session, summaryText);
       await handoffToHumanTool({ summary: summaryText });
       await notifyPersonalWhatsAppLeadSummary(summaryText, phoneDigits);
 
@@ -4065,7 +4091,7 @@ app.post("/webhook", async (req, res) => {
         { label: "📞 Tel", value: phoneDigits || "—" },
       ]);
 
-      updateLead(session, { tour_key: "", quotePreview: summaryText, converted: false, followupSent: false });
+      markLeadRegistered(session, summaryText);
       await handoffToHumanTool({ summary: summaryText });
       await notifyPersonalWhatsAppLeadSummary(summaryText, phoneDigits);
 
@@ -4163,7 +4189,7 @@ app.post("/webhook", async (req, res) => {
         { label: "📞 Tel", value: phoneDigits || "—" },
       ]);
 
-      updateLead(session, { tour_key: "", quotePreview: summaryText, converted: false, followupSent: false });
+      markLeadRegistered(session, summaryText);
       await handoffToHumanTool({ summary: summaryText });
       await notifyPersonalWhatsAppLeadSummary(summaryText, phoneDigits);
 
@@ -4217,7 +4243,7 @@ app.post("/webhook", async (req, res) => {
         { label: "📞 Tel", value: phoneDigits || "—" },
       ]);
 
-      updateLead(session, { tour_key: "", quotePreview: summaryText, converted: false, followupSent: false });
+      markLeadRegistered(session, summaryText);
       await handoffToHumanTool({ summary: summaryText });
       await notifyPersonalWhatsAppLeadSummary(summaryText, phoneDigits);
 
@@ -4267,7 +4293,7 @@ app.post("/webhook", async (req, res) => {
       session.state = "await_real_tour_date";
       updateLead(session, { tour_key: directRealTourKey, quotePreview: "", converted: false, followupSent: false });
       await sendRealTourPresentation(from, tour);
-      await sendWhatsAppText(from, `📅 Si deseas agendar *${tour?.title || "este tour"}*, dime la *fecha* o *salida* que te interesa y seguimos con tu solicitud.\n↩️ Escribe *atrás* para volver al listado de tours.`);
+      await sendWhatsAppText(from, `📅 Si deseas agendar *${tour?.title || "este tour"}*, dime la *fecha* o *salida* que te interesa y seguimos con tu solicitud.`);
       return res.sendStatus(200);
     }
 
