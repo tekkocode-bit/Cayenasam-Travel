@@ -2146,7 +2146,8 @@ function formatRealToursTextList(groupKey, session) {
     `Estas son las excursiones que puedes consultar en esta colección:
 
 ` +
-    tours.map((t, i) => `${i + 1}. ${t.title}`).join("\n") +
+    tours.map((t, i) => `${i + 1}. ${t.title}`).join("
+") +
     `
 
 Responde con el *número* o con el *nombre* del tour que deseas ver.`
@@ -2271,7 +2272,8 @@ function buildRealTourInfoText(tour) {
   lines.push("");
   lines.push(buildRealTourReserveHint());
 
-  return lines.join("\n");
+  return lines.join("
+");
 }
 
 function buildRealTourLeadSummary(session, phoneDigits) {
