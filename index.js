@@ -2058,8 +2058,7 @@ function buildRealTourInfoText(tour) {
   lines.push("");
   lines.push(buildRealTourReserveHint());
 
-  return lines.join("
-");
+  return lines.join("\n");
 }
 
 function buildRealTourLeadSummary(session, phoneDigits) {
