@@ -1,4 +1,3 @@
-
 import express from "express";
 import axios from "axios";
 import crypto from "crypto";
@@ -103,6 +102,7 @@ const TOUR_ORIGINS = [
   { key: "santo_domingo", id: "org_santo_domingo", title: "Santo Domingo" },
   { key: "punta_cana", id: "org_punta_cana", title: "Punta Cana" },
   { key: "las_terrenas", id: "org_las_terrenas", title: "Las Terrenas" },
+  { key: "santiago", id: "org_santiago", title: "Santiago" },
 ];
 
 const TOUR_ORIGIN_ID_TO_KEY = Object.fromEntries(TOUR_ORIGINS.map((o) => [o.id, o.key]));
@@ -122,7 +122,9 @@ const PACKAGE_DESTINATION_ID_TO_KEY = Object.fromEntries(PACKAGE_DESTINATIONS.ma
 // =========================
 const REAL_TOUR_GROUPS = [
   { key: "tours_punta_cana", id: "rtg_punta_cana", title: "Tours desde Punta Cana" },
-  { key: "tours_marzo", id: "rtg_marzo", title: "Tours de Marzo" },
+  { key: "tours_santo_domingo", id: "rtg_santo_domingo", title: "Tours desde Santo Domingo" },
+  { key: "tours_santiago", id: "rtg_santiago", title: "Tours desde Santiago" },
+  { key: "tours_las_terrenas", id: "rtg_las_terrenas", title: "Tours desde Las Terrenas" },
   { key: "tours_semana_santa", id: "rtg_semana_santa", title: "Tours Semana Santa" },
 ];
 
@@ -132,109 +134,145 @@ const REAL_TOUR_GROUP_ID_TO_KEY = Object.fromEntries(
 
 function buildRealToursCatalog() {
   return [
-    // TOURS DE MARZO
+    // TOURS DESDE SANTO DOMINGO
     {
-      key: "marzo_santa_fe_full_day",
-      id: "rt_marzo_santa_fe_full_day",
+      key: "sd_santa_fe_full_day",
+      id: "rt_sd_santa_fe_full_day",
       title: "Santa Fe Full Day",
-      groupKey: "tours_marzo",
+      groupKey: "tours_santo_domingo",
       imageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428140/Santa_Fe_full_day_k2twpq.jpg",
       leadOnly: true,
     },
     {
-      key: "marzo_rio_y_playas_san_juan",
-      id: "rt_marzo_rio_y_playas_san_juan",
+      key: "sd_rio_y_playas_san_juan",
+      id: "rt_sd_rio_y_playas_san_juan",
       title: "Río y Playas San Juan",
-      groupKey: "tours_marzo",
+      groupKey: "tours_santo_domingo",
       imageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428139/Rio_y_playas_san_juan_ivhnev.jpg",
       leadOnly: true,
     },
     {
-      key: "marzo_parapente_jarabacoa",
-      id: "rt_marzo_parapente_jarabacoa",
+      key: "sd_parapente_jarabacoa",
+      id: "rt_sd_parapente_jarabacoa",
       title: "Parapente Jarabacoa",
-      groupKey: "tours_marzo",
+      groupKey: "tours_santo_domingo",
       imageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428138/Parapente_Jarabacoa_itfvyv.jpg",
       leadOnly: true,
     },
     {
-      key: "marzo_ocean_world_confresi",
-      id: "rt_marzo_ocean_world_confresi",
+      key: "sd_ocean_world_confresi",
+      id: "rt_sd_ocean_world_confresi",
       title: "Ocean World Cofresí",
-      groupKey: "tours_marzo",
+      groupKey: "tours_santo_domingo",
       imageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428138/Ocean_world_confresi_punta_cana_wdbjq8.jpg",
       leadOnly: true,
     },
     {
-      key: "marzo_jarabacoa_fourwheel",
-      id: "rt_marzo_jarabacoa_fourwheel",
+      key: "sd_jarabacoa_fourwheel",
+      id: "rt_sd_jarabacoa_fourwheel",
       title: "Jarabacoa Fourwheel",
-      groupKey: "tours_marzo",
+      groupKey: "tours_santo_domingo",
       imageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428136/Jarabacoa_Fourwheel_doakpy.jpg",
       leadOnly: true,
     },
     {
-      key: "marzo_jarabacoa_city_tours",
-      id: "rt_marzo_jarabacoa_city_tours",
+      key: "sd_jarabacoa_city_tours",
+      id: "rt_sd_jarabacoa_city_tours",
       title: "Jarabacoa City Tours",
-      groupKey: "tours_marzo",
+      groupKey: "tours_santo_domingo",
       imageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428135/Jarabacoa_City_Tours_lzxkux.jpg",
       leadOnly: true,
     },
     {
-      key: "marzo_jarabacoa_city_polaris",
-      id: "rt_marzo_jarabacoa_city_polaris",
+      key: "sd_jarabacoa_city_polaris",
+      id: "rt_sd_jarabacoa_city_polaris",
       title: "Jarabacoa City Polaris",
-      groupKey: "tours_marzo",
+      groupKey: "tours_santo_domingo",
       imageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428134/Jarabacoa_city_polaris_y7aea1.jpg",
       leadOnly: true,
     },
     {
-      key: "marzo_isla_saona",
-      id: "rt_marzo_isla_saona",
+      key: "sd_isla_saona",
+      id: "rt_sd_isla_saona",
       title: "Isla Saona",
-      groupKey: "tours_marzo",
+      groupKey: "tours_santo_domingo",
       imageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428133/Isla_Saona_mcvfid.jpg",
       leadOnly: true,
     },
     {
-      key: "marzo_fourwheel_punta_cana",
-      id: "rt_marzo_fourwheel_punta_cana",
+      key: "sd_fourwheel_punta_cana",
+      id: "rt_sd_fourwheel_punta_cana",
       title: "Fourwheel Punta Cana",
-      groupKey: "tours_marzo",
+      groupKey: "tours_santo_domingo",
       imageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428133/Fourwheel_punta_cana_v8lw1l.jpg",
       leadOnly: true,
     },
     {
-      key: "marzo_cayo_arena",
-      id: "rt_marzo_cayo_arena",
+      key: "sd_cayo_arena",
+      id: "rt_sd_cayo_arena",
       title: "Cayo Arena",
-      groupKey: "tours_marzo",
+      groupKey: "tours_santo_domingo",
       imageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428132/Cayo_arena_twyhw9.jpg",
       leadOnly: true,
     },
     {
-      key: "marzo_ballenas_jorobadas",
-      id: "rt_marzo_ballenas_jorobadas",
+      key: "sd_ballenas_jorobadas",
+      id: "rt_sd_ballenas_jorobadas",
       title: "Ballenas Jorobadas",
-      groupKey: "tours_marzo",
+      groupKey: "tours_santo_domingo",
       imageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428131/Ballenas_Jorobada_rv0ioc.jpg",
       leadOnly: true,
     },
     {
-      key: "marzo_cayo_levantado",
-      id: "rt_marzo_cayo_levantado",
+      key: "sd_cayo_levantado",
+      id: "rt_sd_cayo_levantado",
       title: "Cayo Levantado",
-      groupKey: "tours_marzo",
+      groupKey: "tours_santo_domingo",
       imageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428131/Cayo_levantado_mxh6gv.jpg",
       leadOnly: true,
     },
     {
-      key: "marzo_buggies_punta_cana",
-      id: "rt_marzo_buggies_punta_cana",
+      key: "sd_buggies_punta_cana",
+      id: "rt_sd_buggies_punta_cana",
       title: "Buggies Punta Cana",
-      groupKey: "tours_marzo",
+      groupKey: "tours_santo_domingo",
       imageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428130/Buggies_punta_cana_wcqwdl.jpg",
+      leadOnly: true,
+    },
+
+    // TOURS DESDE SANTIAGO (Ejemplo inicial para escalabilidad)
+    {
+      key: "santiago_city_tour",
+      id: "rt_santiago_city_tour",
+      title: "Santiago City Tour",
+      groupKey: "tours_santiago",
+      imageUrl: "", // Puedes agregar el link aquí en el futuro
+      leadOnly: true,
+    },
+    {
+      key: "santiago_cayo_arena",
+      id: "rt_santiago_cayo_arena",
+      title: "Cayo Arena desde Santiago",
+      groupKey: "tours_santiago",
+      imageUrl: "https://res.cloudinary.com/daqqrtg0b/image/upload/v1773428132/Cayo_arena_twyhw9.jpg",
+      leadOnly: true,
+    },
+
+    // TOURS DESDE LAS TERRENAS (Ejemplo inicial para escalabilidad)
+    {
+      key: "terrenas_los_haitises",
+      id: "rt_terrenas_los_haitises",
+      title: "Parque Nacional Los Haitises",
+      groupKey: "tours_las_terrenas",
+      imageUrl: "", // Puedes agregar el link aquí en el futuro
+      leadOnly: true,
+    },
+    {
+      key: "terrenas_cascada_limon",
+      id: "rt_terrenas_cascada_limon",
+      title: "Salto El Limón",
+      groupKey: "tours_las_terrenas",
+      imageUrl: "", // Puedes agregar el link aquí en el futuro
       leadOnly: true,
     },
 
@@ -544,126 +582,97 @@ const REAL_TOUR_TEXT_OVERRIDES = {
     "includesText": "Paseo en barco, snorkel para corales y piscina natural según la promoción oficial.",
     "noteText": "La imagen compartida por la agencia indica salida diaria para esta experiencia."
   },
-  "marzo_santa_fe_full_day": {
+  // TOURS DESDE SANTO DOMINGO
+  "sd_santa_fe_full_day": {
     "priceText": "RD$3,750 adultos / RD$3,300 niños.",
-    "dateText": "Domingos 01, 08, 15, 22 y 29 de marzo.",
     "includesText": "Transporte, desayuno, almuerzo, piscina, city tours y visita a Calles de las Sombrillas.",
-    "noteText": "La promoción publicada corresponde a salidas dominicales dentro de la programación de marzo."
   },
-  "marzo_rio_y_playas_san_juan": {
+  "sd_rio_y_playas_san_juan": {
     "priceText": "RD$2,899 por adulto.",
-    "dateText": "Domingos 15 y 29 de marzo.",
     "includesText": "Transporte, desayuno, almuerzo, playa y visita a El Portón según la promoción oficial.",
-    "noteText": "La pieza oficial corresponde a la colección de marzo."
   },
-  "marzo_parapente_jarabacoa": {
+  "sd_parapente_jarabacoa": {
     "priceText": "RD$4,950 por adulto.",
-    "dateText": "Domingos 15 y 29 de marzo.",
     "includesText": "Transporte, desayuno, almuerzo, parapente, city tours y balnearios.",
-    "noteText": "La promoción publicada corresponde a salidas puntuales de marzo."
   },
-  "marzo_ocean_world_confresi": {
+  "sd_ocean_world_confresi": {
     "priceText": "RD$3,750 adultos / RD$3,250 niños.",
-    "dateText": "Domingos 01, 08, 15, 22 y 29 de marzo.",
     "includesText": "Transporte, desayuno, almuerzo, piscina, city tours y experiencia en Ocean World.",
     "noteText": "La pieza promocional indica niños de 0 a 3 años gratis."
   },
-  "marzo_jarabacoa_fourwheel": {
+  "sd_jarabacoa_fourwheel": {
     "priceText": "RD$3,950 por adulto.",
-    "dateText": "01, 08, 15, 22 y 29 de marzo.",
     "includesText": "Transporte, desayuno, almuerzo, Fourwheel, city tours y balnearios.",
-    "noteText": "La promoción oficial forma parte de la colección de marzo."
   },
-  "marzo_jarabacoa_city_tours": {
+  "sd_jarabacoa_city_tours": {
     "priceText": "RD$2,790 por adulto.",
-    "dateText": "Domingos 01, 08, 15, 22 y 29 de marzo.",
     "includesText": "Transporte, desayuno, almuerzo, city tours y balnearios.",
-    "noteText": "La pieza publicada corresponde a salidas de marzo."
   },
-  "marzo_jarabacoa_city_polaris": {
+  "sd_jarabacoa_city_polaris": {
     "priceText": "RD$4,950 por adulto.",
-    "dateText": "Domingos 01, 08, 15, 22 y 29 de marzo.",
     "includesText": "Transporte, desayuno, almuerzo, Polaris y balnearios.",
-    "noteText": "La promoción publicada corresponde a la colección de marzo."
   },
-  "marzo_isla_saona": {
+  "sd_isla_saona": {
     "priceText": "Adultos RD$3,850 / Niños RD$3,400.",
-    "dateText": "Sábados 07, 14, 21 y 28 / Domingos 01, 08, 15, 22 y 29 de marzo.",
     "includesText": "Transporte, desayuno, almuerzo, catamarán y piscina natural.",
-    "noteText": "La imagen promocional muestra programación ampliada durante marzo."
   },
-  "marzo_fourwheel_punta_cana": {
+  "sd_fourwheel_punta_cana": {
     "priceText": "RD$3,450 por adulto.",
-    "dateText": "Sábados 07, 14, 21 y 28 / Domingos 01, 08, 15, 22 y 29 de marzo.",
     "includesText": "Transporte, desayuno, almuerzo, playa Macao, cueva taína y casa típica.",
     "noteText": "La promoción indica 12+1 gratis para grupos."
   },
-  "marzo_cayo_arena": {
+  "sd_cayo_arena": {
     "priceText": "RD$3,350 por adulto.",
-    "dateText": "Domingos 15 y 29 de marzo.",
     "includesText": "Transporte, desayuno, almuerzo, playa, lancha rápida y manglares.",
-    "noteText": "La pieza oficial corresponde a una salida especial de marzo."
   },
-  "marzo_ballenas_jorobadas": {
+  "sd_ballenas_jorobadas": {
     "priceText": "RD$3,950 por adulto.",
-    "dateText": "07, 08, 14, 15, 21 y 22 de marzo.",
     "includesText": "Transporte, desayuno, almuerzo, lancha y visita a Cayo Levantado.",
     "noteText": "La imagen promocional corresponde a la temporada de ballenas jorobadas."
   },
-  "marzo_cayo_levantado": {
+  "sd_cayo_levantado": {
     "priceText": "RD$2,950 por persona.",
-    "dateText": "07, 08, 14, 15, 21 y 22 de marzo.",
     "includesText": "Transporte, desayuno, almuerzo y visita a Cayo Levantado.",
-    "noteText": "La pieza oficial la presenta como excursión especial de marzo."
   },
-  "marzo_buggies_punta_cana": {
+  "sd_buggies_punta_cana": {
     "priceText": "RD$3,299 por persona.",
-    "dateText": "Sábados 07, 14, 21 y 28 / Domingos 01, 08, 15, 22 y 29 de marzo.",
     "includesText": "Transporte, desayuno, almuerzo, playa Macao, cueva taína y casa típica.",
-    "noteText": "La imagen promocional forma parte de la programación de marzo."
   },
   "ss_polaris": {
     "priceText": "RD$4,750 por persona.",
-    "dateText": "04 y 05 de abril.",
     "reserveText": "Reserva con 50%.",
     "includesText": "Transporte, desayuno, almuerzo, Polaris y zipline.",
     "noteText": "La pieza promocional compartida por la agencia corresponde a la colección de Semana Santa."
   },
   "ss_playa_dominicus": {
     "priceText": "RD$2,550 adultos.",
-    "dateText": "Jueves 02 de abril.",
     "includesText": "Transporte, desayuno, almuerzo, playa, letrero y experiencia en Playa Dominicus.",
     "noteText": "La promoción oficial corresponde a una salida especial de Semana Santa."
   },
   "ss_jet_ski": {
     "priceText": "RD$4,750 por persona.",
-    "dateText": "04 y 05 de abril.",
     "reserveText": "Reserva con 50%.",
     "includesText": "Transporte, desayuno, almuerzo, Jet Ski y zipline.",
     "noteText": "La pieza oficial corresponde a la colección de Semana Santa."
   },
   "ss_isla_saona_2": {
     "priceText": "Adultos RD$3,850 / Niños RD$3,350.",
-    "dateText": "04 y 05 de abril.",
     "includesText": "Transporte, desayuno, almuerzo, barco, catamarán y piscina natural.",
     "noteText": "La promoción publicada corresponde a la colección de Semana Santa."
   },
   "ss_isla_saona": {
     "priceText": "RD$3,850 por persona.",
-    "dateText": "04 de abril.",
     "includesText": "Transporte, desayuno, almuerzo, barco y catamarán.",
     "noteText": "La pieza oficial muestra esta salida como súper promo de Semana Santa."
   },
   "ss_aqua_kart": {
     "priceText": "RD$4,750 por persona.",
-    "dateText": "04 y 05 de abril.",
     "reserveText": "Reserva con 50%.",
     "includesText": "Transporte, desayuno, almuerzo, Aqua Kart y zipline.",
     "noteText": "La pieza promocional corresponde a la colección de Semana Santa."
   },
   "ss_isla_catalina": {
     "priceText": "Adultos RD$3,750 / Niños RD$3,150.",
-    "dateText": "Sábado 04 y domingo 05 de abril.",
     "includesText": "Transporte, desayuno, almuerzo, catamarán y snorkel para corales.",
     "noteText": "La imagen oficial publicada por la agencia corresponde a la colección de Semana Santa."
   }
@@ -726,6 +735,7 @@ function defaultSession() {
 
     pendingAdults: null,
     pendingChildren: null,
+    pendingChildrenAges: null,
     pendingPickup: null,
     pendingCity: null,
     pendingName: null,
@@ -825,6 +835,7 @@ function sanitizeSession(session) {
     "pendingRealTourGroup",
     "pendingRealTourKey",
     "pendingDesiredDate",
+    "pendingChildrenAges",
   ];
 
   for (const k of maybeStringOrNull) {
@@ -912,6 +923,7 @@ function clearIntakeFlow(session) {
 
   session.pendingAdults = null;
   session.pendingChildren = null;
+  session.pendingChildrenAges = null;
   session.pendingPickup = null;
   session.pendingCity = null;
   session.pendingName = null;
@@ -1507,8 +1519,8 @@ function isGreeting(textNorm) {
 function quickHelpText() {
   return (
     `¡Hola! 😊\n` +
-    `Puedo ayudarte con *Tours en República Dominicana*, *Boletos aéreos*, *Solo hoteles*, *Seguros de viaje*, *Traslados* y *Paquetes vacacionales*.\n\n` +
-    `También puedes escribirme *"Tours desde Punta Cana"*, *"Tours de Marzo"* o *"Tours Semana Santa"* para mostrarte las excursiones disponibles.`
+    `Puedo ayudarte con *Tours en República Dominicana*, *Boletos aéreos*, *Solo hoteles*, *Seguros de viaje* y *Traslados*.\n\n` +
+    `También puedes escribirme *"Tours desde Punta Cana"*, *"Tours desde Santo Domingo"*, *"Tours desde Santiago"*, *"Tours desde Las Terrenas"* o *"Tours Semana Santa"* para mostrarte las excursiones disponibles.`
   );
 }
 
@@ -1905,21 +1917,46 @@ function detectRealTourGroupFromUser(text, { allowBareOrigin = false } = {}) {
   if (REAL_TOUR_GROUP_ID_TO_KEY[text]) return REAL_TOUR_GROUP_ID_TO_KEY[text];
 
   if (
-    t === "tours desde punta cana" ||
-    t === "tour desde punta cana" ||
-    t === "tours punta cana" ||
-    t === "tour punta cana"
+    t.includes("tours desde punta cana") ||
+    t.includes("tour desde punta cana") ||
+    t.includes("tours punta cana") ||
+    t.includes("tour punta cana") ||
+    (allowBareOrigin && t === "punta cana")
   ) {
     return "tours_punta_cana";
   }
 
-  if (allowBareOrigin && t === "punta cana") return "tours_punta_cana";
-
-  if (t === "tours de marzo" || t === "tour de marzo" || t === "marzo") {
-    return "tours_marzo";
+  if (
+    t.includes("tours desde santo domingo") ||
+    t.includes("tour desde santo domingo") ||
+    t.includes("tours santo domingo") ||
+    t.includes("tour santo domingo") ||
+    (allowBareOrigin && (t === "santo domingo" || t === "sd"))
+  ) {
+    return "tours_santo_domingo";
   }
 
-  if (t === "tours semana santa" || t === "tour semana santa" || t === "semana santa") {
+  if (
+    t.includes("tours desde santiago") ||
+    t.includes("tour desde santiago") ||
+    t.includes("tours santiago") ||
+    t.includes("tour santiago") ||
+    (allowBareOrigin && t === "santiago")
+  ) {
+    return "tours_santiago";
+  }
+
+  if (
+    t.includes("tours desde las terrenas") ||
+    t.includes("tour desde las terrenas") ||
+    t.includes("tours las terrenas") ||
+    t.includes("tour las terrenas") ||
+    (allowBareOrigin && t === "las terrenas")
+  ) {
+    return "tours_las_terrenas";
+  }
+
+  if (t.includes("tours semana santa") || t.includes("tour semana santa") || t.includes("semana santa")) {
     return "tours_semana_santa";
   }
 
@@ -2067,7 +2104,11 @@ function categoriesEmojiText() {
 ` +
     `🏝️ Tours desde Punta Cana
 ` +
-    `📆 Tours de Marzo
+    `🏙️ Tours desde Santo Domingo
+` +
+    `⛰️ Tours desde Santiago
+` +
+    `🌊 Tours desde Las Terrenas
 ` +
     `⛪ Tours Semana Santa
 
@@ -2077,6 +2118,8 @@ function categoriesEmojiText() {
 }
 
 function mainMenuText() {
+  const visibleLines = SERVICE_LINES.filter(s => s.key !== "ubicacion_contacto" && s.key !== "paquetes_vacacionales");
+  const listText = visibleLines.map(s => `• ${s.title}`).join("\n");
   return (
     `👋 ¡Bienvenido a *${BUSINESS_NAME}*! Soy tu asistente virtual de viajes.
 
@@ -2086,24 +2129,8 @@ function mainMenuText() {
 ` +
     `Puedo ayudarte con:
 ` +
-    `🌴 Tours en República Dominicana
-` +
-    `✈️ Boletos aéreos
-` +
-    `🏨 Solo hoteles
-` +
-    `🛡️ Seguros de viaje
-` +
-    `🚕 Traslados
-` +
-    `🎒 Paquetes vacacionales
-` +
-    `👤 Hablar con un asesor
-` +
-    `📍 Ubicación y contacto
-
-` +
-    `También puedes escribirme directamente *"Tours desde Punta Cana"*, *"Tours de Marzo"* o *"Tours Semana Santa"* y te mostraré las excursiones disponibles en cada colección.`
+    listText +
+    `\n\nTambién puedes escribirme directamente *"Tours desde Santo Domingo"*, *"Tours desde Santiago"*, *"Tours desde Punta Cana"*, *"Tours desde Las Terrenas"* o *"Tours Semana Santa"* y te mostraré las excursiones disponibles en cada colección.`
   );
 }
 
@@ -2112,13 +2139,18 @@ function buildLocationContactText() {
   return (`📍 *Ubicación y contacto*\n\n` + `${addressLine}` + `${MARKET_CONTACT_TEXT}`).trim();
 }
 
-
 function getRealTourGroupIntro(groupKey) {
   if (groupKey === "tours_punta_cana") {
-    return "Excursiones y actividades disponibles para disfrutar saliendo desde Punta Cana.";
+    return "Excursiones y actividades disponibles para disfrutar saliendo desde Punta Cana. Salidas diarias.";
   }
-  if (groupKey === "tours_marzo") {
-    return "Selección de excursiones y promociones compartidas por la agencia para marzo.";
+  if (groupKey === "tours_santo_domingo") {
+    return "Selección de excursiones saliendo desde Santo Domingo. Salidas: Sábados y Domingos (Punto de encuentro: Sambil 5:00 AM).";
+  }
+  if (groupKey === "tours_santiago") {
+    return "Selección de excursiones saliendo desde Santiago. Salidas: Sábados y Domingos.";
+  }
+  if (groupKey === "tours_las_terrenas") {
+    return "Selección de excursiones saliendo desde Las Terrenas. Salidas diarias.";
   }
   if (groupKey === "tours_semana_santa") {
     return "Opciones especiales de excursiones y actividades para Semana Santa.";
@@ -2235,8 +2267,10 @@ function buildRealTourInfoText(tour) {
 
   if (details.dateText) {
     lines.push(`📅 ${details.dateText}`);
-  } else if (groupKey === "tours_marzo") {
-    lines.push(`📅 Salida correspondiente a la colección de marzo publicada por la agencia.`);
+  } else if (groupKey === "tours_santo_domingo" || groupKey === "tours_santiago") {
+    lines.push(`📅 Salidas: Sábados y domingos.`);
+  } else if (groupKey === "tours_las_terrenas" || groupKey === "tours_punta_cana") {
+    lines.push(`📅 Salidas: Todos los días.`);
   } else if (groupKey === "tours_semana_santa") {
     lines.push(`📅 Salida correspondiente a la colección de Semana Santa publicada por la agencia.`);
   } else {
@@ -2247,6 +2281,8 @@ function buildRealTourInfoText(tour) {
     lines.push(`🚐 ${details.pickupText}`);
   } else if (groupKey === "tours_punta_cana") {
     lines.push(`🚐 Pickup / salida: disponible desde Punta Cana según coordinación de la agencia.`);
+  } else if (groupKey === "tours_santo_domingo") {
+    lines.push(`🚐 Salida: Plaza Sambil a las 5:00 AM.`);
   }
 
   if (details.includesText) {
@@ -2284,18 +2320,25 @@ function buildRealTourLeadSummary(session, phoneDigits) {
   const group = getRealTourGroupByKey(session.pendingRealTourGroup || tour?.groupKey);
   const pax = Number(session.pendingAdults || 0) + Number(session.pendingChildren || 0);
 
-  return buildLeadSummary("Nueva solicitud de tour", [
+  const fields = [
     { label: "🧩 Servicio", value: "Tours en República Dominicana" },
     { label: "🗂️ Colección", value: group?.title || "—" },
     { label: "🌴 Tour", value: tour?.title || "—" },
     { label: "📅 Fecha solicitada", value: session.pendingDesiredDate || "—" },
-    { label: "👥 Pasajeros", value: `${pax} (${session.pendingAdults || 0} adultos / ${session.pendingChildren || 0} niños)` },
-    { label: "🚐 Pickup / salida", value: session.pendingPickup || "—" },
-    { label: "📍 Ciudad", value: session.pendingCity || "—" },
-    { label: "👤 Cliente", value: session.pendingName || "—" },
-    { label: "📞 Tel", value: phoneDigits || "—" },
-    { label: "🖼️ Imagen", value: tour?.imageUrl || "—" },
-  ]);
+    { label: "👥 Pasajeros", value: `${pax} (${session.pendingAdults || 0} adultos / ${session.pendingChildren || 0} niños)` }
+  ];
+
+  if (session.pendingChildren > 0) {
+    fields.push({ label: "👶 Edades de niños", value: session.pendingChildrenAges || "No especificadas" });
+  }
+
+  fields.push({ label: "🚐 Pickup / salida", value: session.pendingPickup || "—" });
+  fields.push({ label: "📍 Ciudad", value: session.pendingCity || "—" });
+  fields.push({ label: "👤 Cliente", value: session.pendingName || "—" });
+  fields.push({ label: "📞 Tel", value: phoneDigits || "—" });
+  fields.push({ label: "🖼️ Imagen", value: tour?.imageUrl || "—" });
+
+  return buildLeadSummary("Nueva solicitud de tour", fields);
 }
 
 // =========================
@@ -2405,7 +2448,8 @@ async function sendReminderWhatsAppToBestTarget(priv, fallbackPhoneDigits, text)
 
 async function sendServiceLinesList(to) {
   const url = `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`;
-  const rows = SERVICE_LINES.map((s) => ({
+  const visibleLines = SERVICE_LINES.filter(s => s.key !== "ubicacion_contacto" && s.key !== "paquetes_vacacionales");
+  const rows = visibleLines.map((s) => ({
     id: s.id,
     title: serviceLineRowTitle(s),
     description: "",
@@ -2689,6 +2733,7 @@ async function createReservationTool({
   tour_key,
   adults,
   children,
+  children_ages,
   city,
   pickup,
   notes,
@@ -2710,6 +2755,8 @@ async function createReservationTool({
     throw new Error(`Solo quedan ${remainingSeats} espacios para esa salida`);
   }
 
+  const agesText = children > 0 && children_ages ? ` (Edades: ${children_ages})` : "";
+
   const event = await calendar.events.insert({
     calendarId: GOOGLE_CALENDAR_ID,
     requestBody: {
@@ -2720,7 +2767,7 @@ async function createReservationTool({
         `Tel: ${phone}\n` +
         `Tour: ${tour.title}\n` +
         `Adultos: ${adults}\n` +
-        `Niños: ${children}\n` +
+        `Niños: ${children}${agesText}\n` +
         `Ciudad: ${city}\n` +
         `Punto de salida: ${pickup}\n` +
         `Cotización estimada: ${quote_total ? currency(quote_total) : "—"}\n` +
@@ -2763,6 +2810,44 @@ async function createReservationTool({
     pickup,
     quote_total: Number(quote_total || 0),
   };
+}
+
+async function createRealTourLeadCalendarEvent(session, phone) {
+  try {
+    if (!GOOGLE_CALENDAR_ID || !process.env.GOOGLE_SERVICE_ACCOUNT_JSON) return;
+    const calendar = getCalendarClient();
+    const tour = getRealTourByKey(session.pendingRealTourKey);
+    const group = getRealTourGroupByKey(tour?.groupKey || session.pendingRealTourGroup);
+
+    const pax = Number(session.pendingAdults || 0) + Number(session.pendingChildren || 0);
+    const agesText = session.pendingChildren > 0 ? `\nEdades de niños: ${session.pendingChildrenAges || "No especificadas"}` : "";
+
+    const summary = `Lead Real Tour: ${tour?.title || "Tour"} - ${session.pendingName}`;
+    const description =
+      `Colección: ${group?.title || "—"}\n` +
+      `Tour: ${tour?.title || "—"}\n` +
+      `Cliente: ${session.pendingName || "—"}\n` +
+      `Teléfono: ${phone || "—"}\n` +
+      `Fecha solicitada: ${session.pendingDesiredDate || "—"}\n` +
+      `Pasajeros: ${pax} (${session.pendingAdults || 0} adultos / ${session.pendingChildren || 0} niños)${agesText}\n` +
+      `Punto de salida: ${session.pendingPickup || "—"}\n` +
+      `Ciudad: ${session.pendingCity || "—"}\n` +
+      `Estado: Pendiente`;
+
+    const today = new Date().toISOString().split("T")[0];
+
+    await calendar.events.insert({
+      calendarId: GOOGLE_CALENDAR_ID,
+      requestBody: {
+        summary: summary,
+        description: description,
+        start: { date: today },
+        end: { date: today }
+      }
+    });
+  } catch (error) {
+    console.error("Error creating real tour calendar event", error);
+  }
 }
 
 async function rescheduleReservationTool({
@@ -3138,7 +3223,7 @@ function tryPickSlotFromUserText(session, userText) {
 async function callOpenAI({ session, userText, userPhone, extraSystem = "" }) {
   if (!OPENAI_API_KEY) {
     const fallback =
-      `Puedo ayudarte con *Tours en República Dominicana*, *Boletos aéreos*, *Solo hoteles*, *Seguros de viaje*, *Traslados* y *Paquetes vacacionales*.\n\n` +
+      `Puedo ayudarte con *Tours en República Dominicana*, *Boletos aéreos*, *Solo hoteles*, *Seguros de viaje* y *Traslados*.\n\n` +
       `Escribe *"menú"* para ver las opciones.`;
     session.messages.push({ role: "assistant", content: fallback });
     return fallback;
@@ -3423,6 +3508,7 @@ app.post("/webhook", async (req, res) => {
         "await_real_tour_date",
         "await_real_tour_adults",
         "await_real_tour_children",
+        "await_real_tour_children_ages",
         "await_real_tour_pickup",
         "await_real_tour_city",
         "await_real_tour_name",
@@ -3435,13 +3521,14 @@ app.post("/webhook", async (req, res) => {
         session.pendingDesiredDate = null;
         session.pendingAdults = null;
         session.pendingChildren = null;
+        session.pendingChildrenAges = null;
         session.pendingPickup = null;
         session.pendingCity = null;
         session.pendingName = null;
 
         await sendWhatsAppText(
           from,
-          `↩️ Perfecto. Volviste al listado de tours de *${getRealTourCollectionLabel(session.pendingRealTourGroup)}*.`
+          `↩️ Perfecto. Volviste al listado de tours de *${getRealTourGroupByKey(session.pendingRealTourGroup)?.title || "la colección"}*.`
         );
         await sendRealToursByGroup(from, session.pendingRealTourGroup, session);
         return res.sendStatus(200);
@@ -3569,7 +3656,7 @@ app.post("/webhook", async (req, res) => {
       if (!groupKey) {
         await sendWhatsAppText(
           from,
-          `Perfecto 🌴\nTe compartiré nuestras colecciones de excursiones disponibles.\n\nElige una de estas opciones:\n• Tours desde Punta Cana\n• Tours de Marzo\n• Tours Semana Santa`
+          `Perfecto 🌴\nTe compartiré nuestras colecciones de excursiones disponibles.\n\nElige una de estas opciones:\n• Tours desde Punta Cana\n• Tours desde Santo Domingo\n• Tours desde Santiago\n• Tours desde Las Terrenas\n• Tours Semana Santa`
         );
         await sendRealTourGroupsList(from);
         return res.sendStatus(200);
@@ -3647,8 +3734,22 @@ app.post("/webhook", async (req, res) => {
         return res.sendStatus(200);
       }
       session.pendingChildren = count;
+      
+      if (count > 0) {
+        session.state = "await_real_tour_children_ages";
+        await sendWhatsAppText(from, `Perfecto. Ahora indícame las edades de los niños.`);
+        return res.sendStatus(200);
+      } else {
+        session.state = "await_real_tour_pickup";
+        await sendWhatsAppText(from, `Perfecto.\nAhora dime tu *punto de salida o pickup*.`);
+        return res.sendStatus(200);
+      }
+    }
+
+    if (session.state === "await_real_tour_children_ages") {
+      session.pendingChildrenAges = userText;
       session.state = "await_real_tour_pickup";
-      await sendWhatsAppText(from, `Perfecto.\nAhora dime tu *punto de salida o pickup*.`);
+      await sendWhatsAppText(from, `Gracias.\nAhora dime tu *punto de salida o pickup*.`);
       return res.sendStatus(200);
     }
 
@@ -3697,6 +3798,7 @@ app.post("/webhook", async (req, res) => {
 
       await handoffToHumanTool({ summary: summaryText });
       await notifyPersonalWhatsAppLeadSummary(summaryText, phoneDigits);
+      await createRealTourLeadCalendarEvent(session, phoneDigits);
 
       session.lead = {
         ...defaultLead(),
@@ -3707,12 +3809,14 @@ app.post("/webhook", async (req, res) => {
         lastInteractionAt: new Date().toISOString(),
       };
 
+      const agesMsg = session.pendingChildren > 0 ? `\n👶 Edades: ${session.pendingChildrenAges}` : "";
+
       await sendWhatsAppText(
         from,
         `✅ *Solicitud de tour recibida*\n\n` +
           `🌴 Tour: *${tour?.title || "—"}*\n` +
           `📅 Fecha solicitada: *${session.pendingDesiredDate || "—"}*\n` +
-          `👥 Pasajeros: *${Number(session.pendingAdults || 0) + Number(session.pendingChildren || 0)}*\n` +
+          `👥 Pasajeros: *${Number(session.pendingAdults || 0) + Number(session.pendingChildren || 0)}* (${session.pendingAdults || 0} adultos / ${session.pendingChildren || 0} niños)${agesMsg}\n` +
           `🚐 Pickup: ${session.pendingPickup || "—"}\n` +
           `📍 Ciudad: ${session.pendingCity || "—"}\n\n` +
           `Tu solicitud quedó casi lista. Ahora un asesor de la agencia te contactará para confirmar disponibilidad, validarte el monto final y gestionar el pago.`
@@ -3828,6 +3932,24 @@ app.post("/webhook", async (req, res) => {
       }
 
       session.pendingChildren = count;
+      
+      if (count > 0) {
+        session.state = "await_children_ages";
+        await sendWhatsAppText(from, `Perfecto. Ahora indícame las edades de los niños.`);
+        return res.sendStatus(200);
+      } else {
+        const tour = getTourByKey(session.pendingTour);
+        const quoteText = buildQuotePreview(tour, session.pendingAdults, session.pendingChildren);
+        updateLead(session, { tour_key: session.pendingTour, quotePreview: quoteText });
+
+        session.state = "await_pickup";
+        await sendWhatsAppText(from, `${quoteText}\n\nAhora dime tu *punto de salida o pickup*. Ej: zona hotelera, aeropuerto, punto de encuentro.`);
+        return res.sendStatus(200);
+      }
+    }
+
+    if (session.state === "await_children_ages" && session.selectedSlot) {
+      session.pendingChildrenAges = userText;
       const tour = getTourByKey(session.pendingTour);
       const quoteText = buildQuotePreview(tour, session.pendingAdults, session.pendingChildren);
       updateLead(session, { tour_key: session.pendingTour, quotePreview: quoteText });
@@ -3889,6 +4011,7 @@ app.post("/webhook", async (req, res) => {
         tour_key: session.pendingTour || session.selectedSlot.tour_key,
         adults: session.pendingAdults || 0,
         children: session.pendingChildren || 0,
+        children_ages: session.pendingChildrenAges || null,
         city: session.pendingCity || "",
         pickup: session.pendingPickup || "",
         notes: "",
@@ -3906,6 +4029,7 @@ app.post("/webhook", async (req, res) => {
       if (PERSONAL_WA_TO) {
         const passengerPhone = String(booked?.phone || "").replace(/[^\d]/g, "");
         if (String(PERSONAL_WA_TO).replace(/[^\d]/g, "") !== passengerPhone) {
+          const agesMsg = session.pendingChildren > 0 ? `👶 Edades: ${session.pendingChildrenAges || "N/A"}\n` : "";
           const summary =
             `📌 *Nueva reserva turística*\n\n` +
             `🏢 Agencia: *${BUSINESS_NAME}*\n` +
@@ -3913,6 +4037,7 @@ app.post("/webhook", async (req, res) => {
             `👤 Cliente: *${booked.passenger_name}*\n` +
             `📞 Tel: *${passengerPhone || "—"}*\n` +
             `👥 Pax: *${Number(booked.adults || 0) + Number(booked.children || 0)}* (${booked.adults || 0} adultos / ${booked.children || 0} niños)\n` +
+            agesMsg +
             `📍 Ciudad: ${booked.city || "—"}\n` +
             `🚐 Salida: ${booked.pickup || "—"}\n` +
             `📅 Fecha: *${formatDateInTZ(booked.start, BUSINESS_TIMEZONE)}*\n` +
@@ -3931,6 +4056,7 @@ app.post("/webhook", async (req, res) => {
       session.pendingRange = null;
       session.pendingAdults = null;
       session.pendingChildren = null;
+      session.pendingChildrenAges = null;
       session.pendingPickup = null;
       session.pendingCity = null;
       session.pendingName = null;
