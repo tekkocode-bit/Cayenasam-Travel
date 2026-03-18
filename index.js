@@ -2130,7 +2130,7 @@ function mainMenuText() {
     `Puedo ayudarte con:
 ` +
     listText +
-    `\n\nTambién puedes escribirme directamente *"Tours desde Santo Domingo"*, *"Tours desde Santiago"*, *"Tours desde Punta Cana"*, *"Tours desde Las Terrenas"* o *"Tours Semana Santa"* y te mostraré las excursiones disponibles en cada colección.`
+  
   );
 }
 
@@ -2562,7 +2562,7 @@ async function sendRealTourPresentation(to, tour) {
     await sendWhatsAppImage(
       to,
       tour.imageUrl,
-      `🌴 *${tour.title}*\n📸 Imagen oficial enviada por la agencia\n📍 Revisa la pieza para ver la información comercial publicada del tour`
+      ``
     );
   }
   await sendWhatsAppText(to, buildRealTourInfoText(tour));
