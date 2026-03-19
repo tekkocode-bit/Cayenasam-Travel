@@ -66,6 +66,7 @@ const FOLLOWUP_AFTER_MIN = parseInt(process.env.FOLLOWUP_AFTER_MIN || "180", 10)
 const FOLLOWUP_MAX_AGE_HOURS = parseInt(process.env.FOLLOWUP_MAX_AGE_HOURS || "72", 10);
 
 const PERSONAL_WA_TO = (process.env.PERSONAL_WA_TO || "").trim();
+const ADMIN_WA_TO = (process.env.ADMIN_WA_TO || process.env.ADMIN_PHONE || process.env.PERSONAL_WA_TO || "").trim();
 const PRICE_CURRENCY = (process.env.PRICE_CURRENCY || "US$").trim();
 
 const CATALOG_DOCUMENT_URL = (process.env.CATALOG_DOCUMENT_URL || "").trim();
@@ -713,6 +714,31 @@ function getRealToursByGroup(groupKey) {
   return REAL_TOURS.filter((t) => t.groupKey === groupKey);
 }
 
+function getVisibleRealTourGroups() {
+  return REAL_TOUR_GROUPS.filter((g) => !g.hidden);
+}
+
+function formatVisibleRealTourGroupsInline() {
+  return getVisibleRealTourGroups().map((g) => `*"${g.title}"*`).join(", ");
+}
+
+function getRealTourGroupEmoji(groupKey) {
+  const map = {
+    tours_punta_cana: "🏝️",
+    tours_santo_domingo: "🏙️",
+    tours_santiago: "⛰️",
+    tours_las_terrenas: "🌊",
+    tours_semana_santa: "⛪",
+  };
+  return map[groupKey] || "🌴";
+}
+
+function formatVisibleRealTourGroupsBulletText() {
+  return getVisibleRealTourGroups()
+    .map((g) => `${getRealTourGroupEmoji(g.key)} ${g.title}`)
+    .join("\n");
+}
+
 function getAnyTourByKey(key) {
   return getRealTourByKey(key) || getTourByKey(key);
 }
@@ -783,7 +809,7 @@ function quickHelpText() {
   return (
     `¡Hola! 😊\n` +
     `Puedo ayudarte con *Tours en República Dominicana*, *Boletos aéreos*, *Solo hoteles*, *Seguros de viaje* y *Traslados*.\n\n` +
-    `También puedes escribirme *"Tours desde Punta Cana"*, *"Tours desde Santo Domingo"*, *"Tours desde Santiago"*, *"Tours desde Las Terrenas"* o *"Tours Semana Santa"* para mostrarte las excursiones disponibles.`
+    `También puedes escribirme ${formatVisibleRealTourGroupsInline()} para mostrarte las excursiones disponibles.`
   );
 }
 
@@ -1200,16 +1226,6 @@ function detectRealTourGroupFromUser(text, { allowBareOrigin = false } = {}) {
   }
 
   if (
-    t.includes("tours desde santiago") ||
-    t.includes("tour desde santiago") ||
-    t.includes("tours santiago") ||
-    t.includes("tour santiago") ||
-    (allowBareOrigin && t === "santiago")
-  ) {
-    return "tours_santiago";
-  }
-
-  if (
     t.includes("tours desde las terrenas") ||
     t.includes("tour desde las terrenas") ||
     t.includes("tours las terrenas") ||
@@ -1429,6 +1445,297 @@ function getRequestedDateMeta(rawText) {
   }
 
   return { raw, display: raw, startDate: formatLocalDateOnly(fallbackStart), endDate: formatLocalDateOnly(fallbackEnd), parsed: false };
+}
+
+function isoWeekdayFromDateLike(dateLike, timeZone = BUSINESS_TIMEZONE) {
+  const p = getZonedParts(new Date(dateLike), timeZone);
+  const mid = zonedTimeToUtc({ year: p.year, month: p.month, day: p.day, hour: 12, minute: 0 }, timeZone);
+  return ((mid.getUTCDay() + 6) % 7) + 1;
+}
+
+function formatWeekdayList(isoWeekdays = []) {
+  const names = {
+    1: "lunes",
+    2: "martes",
+    3: "miércoles",
+    4: "jueves",
+    5: "viernes",
+    6: "sábado",
+    7: "domingo",
+  };
+  const pluralNames = {
+    1: "lunes",
+    2: "martes",
+    3: "miércoles",
+    4: "jueves",
+    5: "viernes",
+    6: "sábados",
+    7: "domingos",
+  };
+  const unique = Array.from(new Set((isoWeekdays || []).map((n) => Number(n)).filter((n) => names[n])));
+  if (!unique.length) return "";
+  if (unique.length === 1) return `los ${pluralNames[unique[0]]}`;
+  if (unique.length === 2) return `${names[unique[0]]} y ${names[unique[1]]}`;
+  return unique.map((n) => names[n]).join(", ");
+}
+
+function formatAllowedDatesList(allowedDates = []) {
+  return allowedDates
+    .map((d) => {
+      const iso = `${String(d).trim()}T12:00:00Z`;
+      return new Intl.DateTimeFormat("es-DO", {
+        timeZone: BUSINESS_TIMEZONE,
+        day: "2-digit",
+        month: "long",
+        year: "numeric",
+      }).format(new Date(iso));
+    })
+    .join(", ");
+}
+
+function getHolyWeekRangeForYear(year, timeZone = BUSINESS_TIMEZONE) {
+  const easter = getEasterSundayUTC(year, timeZone);
+  const start = addLocalDaysUTC(easter, -6, timeZone);
+  const end = addLocalDaysUTC(start, 7, timeZone);
+  return { start, end };
+}
+
+function isDateInsideHolyWeek(dateLike, timeZone = BUSINESS_TIMEZONE) {
+  const date = new Date(dateLike);
+  const year = getZonedParts(date, timeZone).year;
+  const { start, end } = getHolyWeekRangeForYear(year, timeZone);
+  return date >= start && date < end;
+}
+
+function parseRealTourDateInput(rawText) {
+  const raw = String(rawText || "").trim();
+  const normalized = normalizeText(raw);
+
+  if (!raw) return { kind: "empty", raw, normalized };
+  if (normalized.includes("semana santa")) return { kind: "holy_week", raw, normalized };
+
+  for (const [name, iso] of Object.entries(DOW)) {
+    const normName = normalizeText(name);
+    if (normalized === normName || normalized.startsWith(normName + " ") || normalized.includes(" " + normName)) {
+      return { kind: "weekday", raw, normalized, isoWeekday: iso };
+    }
+  }
+
+  const parsed = parseDateRangeFromText(raw);
+  if (parsed?.from) {
+    return {
+      kind: "date",
+      raw,
+      normalized,
+      parsed,
+      isoWeekday: isoWeekdayFromDateLike(parsed.from, BUSINESS_TIMEZONE),
+      localDate: formatLocalDateOnly(parsed.from, BUSINESS_TIMEZONE),
+    };
+  }
+
+  return { kind: "unparsed", raw, normalized };
+}
+
+function getRealTourAvailability(tour) {
+  const details = getRealTourTextDetails(tour) || {};
+  const configured = details?.availability;
+  if (configured && typeof configured === "object" && configured.type) {
+    return configured;
+  }
+
+  const rawDateText = normalizeText(details?.dateText || "");
+  const titleNorm = normalizeText(tour?.title || "");
+
+  if (tour?.groupKey === "tours_semana_santa" || rawDateText.includes("semana santa")) {
+    return { type: "holy_week", label: details?.dateText || "Semana Santa" };
+  }
+
+  if (rawDateText.includes("todos los dias")) {
+    return { type: "daily", label: details?.dateText || "Todos los días." };
+  }
+
+  if (rawDateText.includes("todos los sabados")) {
+    return { type: "weekdays", allowedWeekdays: [6], label: details?.dateText || "Todos los sábados." };
+  }
+
+  if (rawDateText.includes("todos los domingos")) {
+    return { type: "weekdays", allowedWeekdays: [7], label: details?.dateText || "Todos los domingos." };
+  }
+
+  if (rawDateText.includes("todos los viernes")) {
+    return { type: "weekdays", allowedWeekdays: [5], label: details?.dateText || "Todos los viernes." };
+  }
+
+  if (rawDateText.includes("sabados y domingos")) {
+    return { type: "weekdays", allowedWeekdays: [6, 7], label: details?.dateText || "Sábados y domingos." };
+  }
+
+  if (rawDateText.includes("jueves a domingo")) {
+    return { type: "weekdays", allowedWeekdays: [4, 5, 6, 7], label: details?.dateText || "Jueves a domingo." };
+  }
+
+  if (rawDateText.includes("martes, jueves y sabados") || rawDateText.includes("martes jueves y sabados")) {
+    return { type: "weekdays", allowedWeekdays: [2, 4, 6], label: details?.dateText || "Martes, jueves y sábados." };
+  }
+
+  if (rawDateText.includes("vigente") || rawDateText.includes("vigentes")) {
+    return {
+      type: "dates",
+      allowedDates: Array.isArray(configured?.allowedDates) ? configured.allowedDates : [],
+      label: details?.dateText || "Fechas vigentes",
+    };
+  }
+
+  if (tour?.groupKey === "tours_las_terrenas" && titleNorm.includes("santo domingo") && titleNorm.includes("3 ojos")) {
+    return { type: "weekdays", allowedWeekdays: [6], label: "Todos los sábados." };
+  }
+
+  if (tour?.groupKey === "tours_punta_cana" && titleNorm.includes("santo domingo") && titleNorm.includes("3 ojos")) {
+    return { type: "weekdays", allowedWeekdays: [5], label: "Todos los viernes." };
+  }
+
+  return null;
+}
+
+function buildRealTourDatePrompt(tour) {
+  const availability = getRealTourAvailability(tour);
+  const title = tour?.title || "este tour";
+
+  if (!availability) {
+    return `📅 Ahora dime la *fecha* que te interesa para *${title}*.
+Ej: "sábado", "15 de abril" o "domingo".`;
+  }
+
+  if (availability.type === "daily") {
+    return `📅 Ahora dime la *fecha* que te interesa para *${title}*.
+✅ Este tour está disponible *todos los días*.
+Ej: "mañana", "sábado" o "15 de abril".`;
+  }
+
+  if (availability.type === "weekdays") {
+    const label = formatWeekdayList(availability.allowedWeekdays || []);
+    const exampleDay = Number((availability.allowedWeekdays || [])[0] || 6);
+    const exampleNames = { 1: "lunes", 2: "martes", 3: "miércoles", 4: "jueves", 5: "viernes", 6: "sábado", 7: "domingo" };
+    return `📅 Ahora dime la *fecha* que te interesa para *${title}*.
+✅ Este tour sale solo *${label}*.
+Ejemplos válidos: "${exampleNames[exampleDay]}" o una fecha que caiga en ese día.`;
+  }
+
+  if (availability.type === "holy_week") {
+    return `📅 Ahora dime la *fecha* que te interesa para *${title}*.
+✅ Este tour aplica solo para *Semana Santa*.
+Ejemplos válidos: "semana santa" o una fecha dentro de esa semana.`;
+  }
+
+  if (availability.type === "dates") {
+    const allowed = Array.isArray(availability.allowedDates) ? availability.allowedDates : [];
+    const allowedText = allowed.length ? formatAllowedDatesList(allowed) : "las fechas vigentes publicadas por la agencia";
+    return `📅 Ahora dime la *fecha* que te interesa para *${title}*.
+✅ Este tour está disponible solo en *${allowedText}*.`;
+  }
+
+  return `📅 Ahora dime la *fecha* que te interesa para *${title}*.`;
+}
+
+function validateRealTourRequestedDate(tour, rawText) {
+  const availability = getRealTourAvailability(tour);
+  const parsedInput = parseRealTourDateInput(rawText);
+
+  if (parsedInput.kind === "empty") {
+    return {
+      ok: false,
+      message: `Por favor, indícame la *fecha* que te interesa para el tour.
+
+${buildRealTourDatePrompt(tour)}`,
+    };
+  }
+
+  if (!availability) {
+    if (parsedInput.kind === "unparsed") {
+      return {
+        ok: false,
+        message: `Necesito una *fecha válida* o un *día* para continuar.
+
+${buildRealTourDatePrompt(tour)}`,
+      };
+    }
+    return { ok: true, parsedInput, availability: null };
+  }
+
+  if (availability.type === "daily") {
+    if (parsedInput.kind === "unparsed") {
+      return {
+        ok: false,
+        message: `Ese formato no me ayuda a validar la fecha 🙏
+
+${buildRealTourDatePrompt(tour)}`,
+      };
+    }
+    return { ok: true, parsedInput, availability };
+  }
+
+  if (availability.type === "weekdays") {
+    if (!["weekday", "date"].includes(parsedInput.kind)) {
+      return {
+        ok: false,
+        message: `Ese tour solo está disponible *${formatWeekdayList(availability.allowedWeekdays || [])}*.
+
+${buildRealTourDatePrompt(tour)}`,
+      };
+    }
+
+    const allowed = new Set((availability.allowedWeekdays || []).map((n) => Number(n)));
+    if (!allowed.has(Number(parsedInput.isoWeekday))) {
+      return {
+        ok: false,
+        message: `Ese tour solo está disponible *${formatWeekdayList(availability.allowedWeekdays || [])}*.
+
+${buildRealTourDatePrompt(tour)}`,
+      };
+    }
+
+    return { ok: true, parsedInput, availability };
+  }
+
+  if (availability.type === "holy_week") {
+    if (parsedInput.kind === "holy_week") return { ok: true, parsedInput, availability };
+    if (parsedInput.kind === "date" && isDateInsideHolyWeek(parsedInput.parsed.from, BUSINESS_TIMEZONE)) {
+      return { ok: true, parsedInput, availability };
+    }
+    return {
+      ok: false,
+      message: `Ese tour aplica solo para *Semana Santa*.
+
+${buildRealTourDatePrompt(tour)}`,
+    };
+  }
+
+  if (availability.type === "dates") {
+    const allowedDates = Array.isArray(availability.allowedDates) ? availability.allowedDates : [];
+    if (!allowedDates.length) {
+      return {
+        ok: false,
+        message: `Para este tour necesito una de las *fechas vigentes* publicadas por la agencia.`,
+      };
+    }
+    if (parsedInput.kind !== "date") {
+      return {
+        ok: false,
+        message: `Para este tour necesito una *fecha exacta*.
+Fechas válidas: ${formatAllowedDatesList(allowedDates)}.`,
+      };
+    }
+    if (!allowedDates.includes(parsedInput.localDate)) {
+      return {
+        ok: false,
+        message: `Esa fecha no está dentro de las *fechas vigentes* del tour.
+Fechas válidas: ${formatAllowedDatesList(allowedDates)}.`,
+      };
+    }
+    return { ok: true, parsedInput, availability };
+  }
+
+  return { ok: true, parsedInput, availability };
 }
 
 function normalizeChildrenAgesInput(userText, expectedChildren = 0) {
@@ -1773,15 +2080,7 @@ function categoriesEmojiText() {
 ` +
     `Tenemos estas colecciones disponibles para ayudarte a elegir más fácil:
 ` +
-    `🏝️ Tours desde Punta Cana
-` +
-    `🏙️ Tours desde Santo Domingo
-` +
-    `⛰️ Tours desde Santiago
-` +
-    `🌊 Tours desde Las Terrenas
-` +
-    `⛪ Tours Semana Santa
+    `${formatVisibleRealTourGroupsBulletText()}
 
 ` +
     `Selecciona la colección que deseas explorar y te mostraré las excursiones disponibles.`
@@ -1832,7 +2131,7 @@ function formatRealToursTextList(groupKey, session) {
   const group = getRealTourGroupByKey(groupKey);
   const tours = getRealToursByGroup(groupKey);
 
-  if (!group || !tours.length) return "No encontré excursiones disponibles en esta colección ahora mismo 🙏";
+  if (!group || group.hidden || !tours.length) return "No encontré excursiones disponibles en esta colección ahora mismo 🙏";
 
   if (session) {
     session.lastRealTours = tours.map((t) => ({ key: t.key, title: t.title }));
@@ -2177,7 +2476,7 @@ async function sendPackageDestinationsList(to) {
 }
 
 async function sendRealTourGroupsList(to) {
-  const rows = REAL_TOUR_GROUPS.map((g) => ({ id: g.id, title: waRowTitle(g.title), description: "" }));
+  const rows = getVisibleRealTourGroups().map((g) => ({ id: g.id, title: waRowTitle(g.title), description: "" }));
   await sendInteractiveList(to, {
     header: "Colecciones de tours",
     body: "Selecciona la temporada o colección de excursiones que deseas ver 👇",
@@ -3223,7 +3522,7 @@ app.post("/webhook", async (req, res) => {
       if (!groupKey) {
         await sendWhatsAppText(
           from,
-          `Perfecto 🌴\nTe compartiré nuestras colecciones de excursiones disponibles.\n\nElige una de estas opciones:\n• Tours desde Punta Cana\n• Tours desde Santo Domingo\n• Tours desde Santiago\n• Tours desde Las Terrenas\n• Tours Semana Santa`
+          `Perfecto 🌴\nTe compartiré nuestras colecciones de excursiones disponibles.\n\nElige una de estas opciones:\n${getVisibleRealTourGroups().map((g) => `• ${g.title}`).join("\n")}`
         );
         await sendRealTourGroupsList(from);
         return res.sendStatus(200);
@@ -3264,18 +3563,19 @@ app.post("/webhook", async (req, res) => {
 
       session.state = "await_real_tour_date";
       await sendRealTourPresentation(from, pickedTour);
-      await sendWhatsAppText(
-        from,
-        `📅 Ahora dime la *fecha* que te interesa para *${pickedTour.title}*.\nEj: "sábado", "15 de abril", "domingo" o "semana santa".`
-      );
+      await sendWhatsAppText(from, buildRealTourDatePrompt(pickedTour));
       return res.sendStatus(200);
     }
 
     if (session.state === "await_real_tour_date") {
-      if (tNorm.length < 2) {
-        await sendWhatsAppText(from, `Por favor, indícame la *fecha* que te interesa para el tour.`);
+      const tour = getRealTourByKey(session.pendingRealTourKey);
+      const validation = validateRealTourRequestedDate(tour, userText);
+
+      if (!validation.ok) {
+        await sendWhatsAppText(from, validation.message || `Por favor, indícame una *fecha válida* para el tour.`);
         return res.sendStatus(200);
       }
+
       session.pendingDesiredDate = userText;
       session.state = "await_real_tour_adults";
       await sendWhatsAppText(from, `Perfecto 👍
@@ -3670,14 +3970,26 @@ async function reminderLoop() {
 
 async function notifyPersonalWhatsAppLeadSummary(summaryText, customerPhone = "") {
   try {
-    if (!PERSONAL_WA_TO) return;
-
-    const myTo = String(PERSONAL_WA_TO).replace(/[^\d]/g, "");
     const leadPhone = String(customerPhone || "").replace(/[^\d]/g, "");
-    if (!myTo) return;
-    if (leadPhone && myTo === leadPhone) return;
+    const targets = Array.from(
+      new Set(
+        [ADMIN_WA_TO, PERSONAL_WA_TO]
+          .map((v) => String(v || "").replace(/[^\d]/g, ""))
+          .filter(Boolean)
+      )
+    ).filter((to) => !(leadPhone && to === leadPhone));
 
-    await sendWhatsAppText(myTo, summaryText, "BOT");
+    if (!targets.length) {
+      console.warn("notifyPersonalWhatsAppLeadSummary skipped: no admin destination configured");
+      return;
+    }
+
+    const adminMessage = `📥 *Resumen admin*
+
+${summaryText}`;
+    for (const to of targets) {
+      await sendWhatsAppText(to, adminMessage, "BOT");
+    }
   } catch (e) {
     console.error("notifyPersonalWhatsAppLeadSummary error:", e?.response?.data || e?.message || e);
   }
