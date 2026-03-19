@@ -1542,7 +1542,7 @@ function getRealTourAvailability(tour) {
   const rawDateText = normalizeText(details?.dateText || "");
   const titleNorm = normalizeText(tour?.title || "");
 
-  if (configured && typeof configured === "object" && configured.type === "dates") {
+  if (configured && typeof configured === "object" && configured.type) {
     return configured;
   }
 
@@ -1563,10 +1563,6 @@ function getRealTourAvailability(tour) {
       return { type: "weekdays", allowedWeekdays: [5], label: details?.dateText || "Todos los viernes." };
     }
     return { type: "daily", label: details?.dateText || "Todos los días." };
-  }
-
-  if (configured && typeof configured === "object" && configured.type) {
-    return configured;
   }
 
   if (rawDateText.includes("todos los dias")) {

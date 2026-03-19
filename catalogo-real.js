@@ -549,10 +549,10 @@ export const REAL_TOUR_TEXT_OVERRIDES = {
   },
   "terrenas_santo_domingo_casco_historico_tres_ojos": {
     "priceText": "US$80 por persona.",
-    "dateText": "Todos los días.",
+    "dateText": "Todos los sábados.",
+    "availability": { "type": "weekdays", "allowedWeekdays": [6], "label": "Todos los sábados." },
     "pickupText": "Salida desde Las Terrenas según coordinación de la agencia.",
-    "includesText": "Visita a Los 3 Ojos, cuevas, lancha subterránea, casco histórico, guía y entradas a lugares históricos.",
-    "noteText": "Este es el mismo tour de Santo Domingo + Casco Histórico + Los 3 Ojos cargado para la salida desde Las Terrenas."
+    "includesText": "Visita a Los 3 Ojos, cuevas, lancha subterránea, casco histórico, guía y entradas a lugares históricos."
   },
   "terrenas_los_haitises": {
     "priceText": "US$80 por persona.",
@@ -571,9 +571,9 @@ export const REAL_TOUR_TEXT_OVERRIDES = {
   "pc_santo_domingo_casco_historico_tres_ojos": {
     "priceText": "US$80 por persona.",
     "dateText": "Todos los viernes.",
+    "availability": { "type": "weekdays", "allowedWeekdays": [5], "label": "Todos los viernes." },
     "pickupText": "Traslado desde tu hotel en Punta Cana según coordinación de la agencia.",
-    "includesText": "Visita a Los 3 Ojos, cuevas, lancha subterránea, casco histórico, guía y entradas a lugares históricos.",
-    "noteText": "Es el mismo tour de Santo Domingo + Casco Histórico + Los 3 Ojos cargado para salida desde Punta Cana."
+    "includesText": "Visita a Los 3 Ojos, cuevas, lancha subterránea, casco histórico, guía y entradas a lugares históricos."
   },
   "pc_los_haitises_cayo_levantado": {
     "priceText": "US$125 por persona.",
