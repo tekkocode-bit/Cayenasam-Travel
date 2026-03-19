@@ -781,12 +781,9 @@ function isGreeting(textNorm) {
 
 function quickHelpText() {
   return (
-    `¡Hola! 😊
-` +
-    `Puedo ayudarte con *Tours en República Dominicana*, *Boletos aéreos*, *Solo hoteles*, *Seguros de viaje* y *Traslados*.
-
-` +
-    `Escríbeme el servicio que te interesa o toca el menú para ver las opciones disponibles.`
+    `¡Hola! 😊\n` +
+    `Puedo ayudarte con *Tours en República Dominicana*, *Boletos aéreos*, *Solo hoteles*, *Seguros de viaje* y *Traslados*.\n\n` +
+    `También puedes escribirme *"Tours desde Punta Cana"*, *"Tours desde Santo Domingo"*, *"Tours desde Santiago"*, *"Tours desde Las Terrenas"* o *"Tours Semana Santa"* para mostrarte las excursiones disponibles.`
   );
 }
 
@@ -1271,98 +1268,6 @@ function parsePassengerCount(text) {
   return null;
 }
 
-function isValidEmail(text) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(text || "").trim());
-}
-
-function getRealTourGroupContext(groupKey) {
-  switch (groupKey) {
-    case "tours_santo_domingo":
-      return { defaultCity: "Santo Domingo", fixedPickup: "Sambil", askPickup: false, pickupPrompt: "", locationLabel: "Salida" };
-    case "tours_punta_cana":
-      return { defaultCity: "Punta Cana", fixedPickup: "", askPickup: true, pickupPrompt: `Perfecto.\nAhora dime en qué *hotel* estás o desde qué *ubicación* saldrías.`, locationLabel: "Hotel / ubicación" };
-    case "tours_santiago":
-      return { defaultCity: "Santiago", fixedPickup: "", askPickup: true, pickupPrompt: `Perfecto.\nAhora dime desde qué *ubicación* saldrías en Santiago.`, locationLabel: "Ubicación" };
-    case "tours_las_terrenas":
-      return { defaultCity: "Las Terrenas", fixedPickup: "", askPickup: true, pickupPrompt: `Perfecto.\nAhora dime en qué *hotel* estás o desde qué *ubicación* saldrías en Las Terrenas.`, locationLabel: "Hotel / ubicación" };
-    default:
-      return { defaultCity: "", fixedPickup: "", askPickup: true, pickupPrompt: `Perfecto.\nAhora dime tu *ubicación* o *punto de salida*.`, locationLabel: "Ubicación" };
-  }
-}
-
-function formatLocalDateOnly(dateLike, timeZone = BUSINESS_TIMEZONE) {
-  const p = getZonedParts(new Date(dateLike), timeZone);
-  return `${String(p.year).padStart(4, "0")}-${String(p.month).padStart(2, "0")}-${String(p.day).padStart(2, "0")}`;
-}
-
-function getEasterSundayUTC(year, timeZone = BUSINESS_TIMEZONE) {
-  const a = year % 19;
-  const b = Math.floor(year / 100);
-  const c = year % 100;
-  const d = Math.floor(b / 4);
-  const e = b % 4;
-  const f = Math.floor((b + 8) / 25);
-  const g = Math.floor((b - f + 1) / 3);
-  const h = (19 * a + b - d - g + 15) % 30;
-  const i = Math.floor(c / 4);
-  const k = c % 4;
-  const l = (32 + 2 * e + 2 * i - h - k) % 7;
-  const m = Math.floor((a + 11 * h + 22 * l) / 451);
-  const month = Math.floor((h + l - 7 * m + 114) / 31);
-  const day = ((h + l - 7 * m + 114) % 31) + 1;
-  return zonedTimeToUtc({ year, month, day, hour: 0, minute: 0 }, timeZone);
-}
-
-function getNextHolyWeekStartUTC(now = new Date(), timeZone = BUSINESS_TIMEZONE) {
-  const currentYear = getZonedParts(now, timeZone).year;
-  for (const year of [currentYear, currentYear + 1]) {
-    const easter = getEasterSundayUTC(year, timeZone);
-    const holyWeekMonday = addLocalDaysUTC(easter, -6, timeZone);
-    if (holyWeekMonday >= startOfLocalDayUTC(now, timeZone)) return holyWeekMonday;
-  }
-  const fallbackEaster = getEasterSundayUTC(currentYear + 1, timeZone);
-  return addLocalDaysUTC(fallbackEaster, -6, timeZone);
-}
-
-function getRequestedDateMeta(rawText) {
-  const raw = String(rawText || "").trim();
-  const normalized = normalizeText(raw);
-  const fallbackStart = startOfLocalDayUTC(new Date(), BUSINESS_TIMEZONE);
-  const fallbackEnd = addLocalDaysUTC(fallbackStart, 1, BUSINESS_TIMEZONE);
-
-  if (!raw) {
-    return { raw, display: "—", startDate: formatLocalDateOnly(fallbackStart), endDate: formatLocalDateOnly(fallbackEnd), parsed: false };
-  }
-
-  if (normalized.includes("semana santa")) {
-    const startUTC = getNextHolyWeekStartUTC(new Date(), BUSINESS_TIMEZONE);
-    const endUTC = addLocalDaysUTC(startUTC, 1, BUSINESS_TIMEZONE);
-    return { raw, display: `Semana Santa (${formatDateInTZ(startUTC.toISOString(), BUSINESS_TIMEZONE)})`, startDate: formatLocalDateOnly(startUTC), endDate: formatLocalDateOnly(endUTC), parsed: true };
-  }
-
-  const parsed = parseDateRangeFromText(raw);
-  if (parsed?.from) {
-    const startUTC = new Date(parsed.from);
-    const endUTC = addLocalDaysUTC(startUTC, 1, BUSINESS_TIMEZONE);
-    return { raw, display: formatDateInTZ(parsed.from, BUSINESS_TIMEZONE), startDate: formatLocalDateOnly(startUTC), endDate: formatLocalDateOnly(endUTC), parsed: true };
-  }
-
-  return { raw, display: raw, startDate: formatLocalDateOnly(fallbackStart), endDate: formatLocalDateOnly(fallbackEnd), parsed: false };
-}
-
-function normalizeChildrenAgesInput(userText, expectedChildren = 0) {
-  const raw = String(userText || "").trim();
-  const expected = Number(expectedChildren || 0);
-  const ages = (raw.match(/\d{1,2}/g) || []).map((n) => String(parseInt(n, 10)));
-  if (expected <= 0) return { ok: true, formatted: "" };
-  if (expected === 1) {
-    const value = ages[0] || raw;
-    return String(value || "").trim() ? { ok: true, formatted: String(value).trim() } : { ok: false, formatted: "" };
-  }
-  if (ages.length === expected) return { ok: true, formatted: ages.join(", ") };
-  return { ok: false, formatted: "" };
-}
-
 function buildTourInfoText(tour) {
   if (!tour) return "";
 
@@ -1441,6 +1346,102 @@ function clearLeadOnBooking(session) {
     followupSent: true,
     lastInteractionAt: new Date().toISOString(),
   };
+}
+
+function isValidEmail(text) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(text || "").trim());
+}
+
+function getRealTourGroupContext(groupKey) {
+  switch (groupKey) {
+    case "tours_santo_domingo":
+      return { defaultCity: "Santo Domingo", fixedPickup: "Sambil", askPickup: false, pickupPrompt: "", locationLabel: "Salida" };
+    case "tours_punta_cana":
+      return { defaultCity: "Punta Cana", fixedPickup: "", askPickup: true, pickupPrompt: `Perfecto.
+Ahora dime en qué *hotel* estás o desde qué *ubicación* saldrías.`, locationLabel: "Hotel / ubicación" };
+    case "tours_santiago":
+      return { defaultCity: "Santiago", fixedPickup: "", askPickup: true, pickupPrompt: `Perfecto.
+Ahora dime desde qué *ubicación* saldrías en Santiago.`, locationLabel: "Ubicación" };
+    case "tours_las_terrenas":
+      return { defaultCity: "Las Terrenas", fixedPickup: "", askPickup: true, pickupPrompt: `Perfecto.
+Ahora dime en qué *hotel* estás o desde qué *ubicación* saldrías en Las Terrenas.`, locationLabel: "Hotel / ubicación" };
+    default:
+      return { defaultCity: "", fixedPickup: "", askPickup: true, pickupPrompt: `Perfecto.
+Ahora dime tu *ubicación* o *punto de salida*.`, locationLabel: "Ubicación" };
+  }
+}
+
+function formatLocalDateOnly(dateLike, timeZone = BUSINESS_TIMEZONE) {
+  const p = getZonedParts(new Date(dateLike), timeZone);
+  return `${String(p.year).padStart(4, "0")}-${String(p.month).padStart(2, "0")}-${String(p.day).padStart(2, "0")}`;
+}
+
+function getEasterSundayUTC(year, timeZone = BUSINESS_TIMEZONE) {
+  const a = year % 19;
+  const b = Math.floor(year / 100);
+  const c = year % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31);
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return zonedTimeToUtc({ year, month, day, hour: 0, minute: 0 }, timeZone);
+}
+
+function getNextHolyWeekStartUTC(now = new Date(), timeZone = BUSINESS_TIMEZONE) {
+  const currentYear = getZonedParts(now, timeZone).year;
+  for (const year of [currentYear, currentYear + 1]) {
+    const easter = getEasterSundayUTC(year, timeZone);
+    const holyWeekMonday = addLocalDaysUTC(easter, -6, timeZone);
+    if (holyWeekMonday >= startOfLocalDayUTC(now, timeZone)) return holyWeekMonday;
+  }
+  const fallbackEaster = getEasterSundayUTC(currentYear + 1, timeZone);
+  return addLocalDaysUTC(fallbackEaster, -6, timeZone);
+}
+
+function getRequestedDateMeta(rawText) {
+  const raw = String(rawText || "").trim();
+  const normalized = normalizeText(raw);
+  const fallbackStart = startOfLocalDayUTC(new Date(), BUSINESS_TIMEZONE);
+  const fallbackEnd = addLocalDaysUTC(fallbackStart, 1, BUSINESS_TIMEZONE);
+
+  if (!raw) {
+    return { raw, display: "—", startDate: formatLocalDateOnly(fallbackStart), endDate: formatLocalDateOnly(fallbackEnd), parsed: false };
+  }
+
+  if (normalized.includes("semana santa")) {
+    const startUTC = getNextHolyWeekStartUTC(new Date(), BUSINESS_TIMEZONE);
+    const endUTC = addLocalDaysUTC(startUTC, 1, BUSINESS_TIMEZONE);
+    return { raw, display: `Semana Santa (${formatDateInTZ(startUTC.toISOString(), BUSINESS_TIMEZONE)})`, startDate: formatLocalDateOnly(startUTC), endDate: formatLocalDateOnly(endUTC), parsed: true };
+  }
+
+  const parsed = parseDateRangeFromText(raw);
+  if (parsed?.from) {
+    const startUTC = new Date(parsed.from);
+    const endUTC = addLocalDaysUTC(startUTC, 1, BUSINESS_TIMEZONE);
+    return { raw, display: formatDateInTZ(parsed.from, BUSINESS_TIMEZONE), startDate: formatLocalDateOnly(startUTC), endDate: formatLocalDateOnly(endUTC), parsed: true };
+  }
+
+  return { raw, display: raw, startDate: formatLocalDateOnly(fallbackStart), endDate: formatLocalDateOnly(fallbackEnd), parsed: false };
+}
+
+function normalizeChildrenAgesInput(userText, expectedChildren = 0) {
+  const raw = String(userText || "").trim();
+  const expected = Number(expectedChildren || 0);
+  const ages = (raw.match(/\d{1,2}/g) || []).map((n) => String(parseInt(n, 10)));
+  if (expected <= 0) return { ok: true, formatted: "" };
+  if (expected === 1) {
+    const value = ages[0] || raw;
+    return String(value || "").trim() ? { ok: true, formatted: String(value).trim() } : { ok: false, formatted: "" };
+  }
+  if (ages.length === expected) return { ok: true, formatted: ages.join(", ") };
+  return { ok: false, formatted: "" };
 }
 
 function buildLeadSummary(title, fields = []) {
@@ -1789,8 +1790,7 @@ function categoriesEmojiText() {
 
 function mainMenuText() {
   const visibleLines = SERVICE_LINES.filter(s => s.key !== "ubicacion_contacto" && s.key !== "paquetes_vacacionales");
-  const listText = visibleLines.map(s => `• ${s.title}`).join("
-");
+  const listText = visibleLines.map(s => `• ${s.title}`).join("\n");
   return (
     `👋 ¡Bienvenido a *${BUSINESS_NAME}*! Soy tu asistente virtual de viajes.
 
@@ -1973,6 +1973,12 @@ function buildRealTourInfoText(tour) {
     lines.push(`📌 Reserva: la solicitud queda registrada para que un asesor te contacte y cierre la confirmación.`);
   }
 
+  if (details.noteText) {
+    lines.push(`📝 ${details.noteText}`);
+  } else {
+    lines.push(`🖼️ La imagen que recibiste contiene la información promocional oficial compartida por la agencia.`);
+  }
+
   lines.push("");
   lines.push(buildRealTourReserveHint());
 
@@ -2010,8 +2016,6 @@ function buildRealTourLeadSummary(session, phoneDigits) {
   return buildLeadSummary("Nueva solicitud de tour", fields);
 }
 
-// =========================
-// WhatsApp send helpers
 // =========================
 // WhatsApp send helpers
 // =========================
@@ -2191,12 +2195,15 @@ async function sendRealToursByGroup(to, groupKey, session) {
 async function sendRealTourPresentation(to, tour) {
   if (!tour) return;
   if (tour.imageUrl) {
-    await sendWhatsAppImage(to, tour.imageUrl);
+    await sendWhatsAppImage(
+      to,
+      tour.imageUrl,
+      `🌴 *${tour.title}*\n📸 Imagen oficial enviada por la agencia\n📍 Revisa la pieza para ver la información comercial publicada del tour`
+    );
   }
   await sendWhatsAppText(to, buildRealTourInfoText(tour));
 }
 
-async function sendCatalogDocument(to) {
 async function sendCatalogDocument(to) {
   if (!CATALOG_DOCUMENT_URL) {
     await sendWhatsAppText(
@@ -2490,7 +2497,6 @@ Edades de niños: ${session.pendingChildrenAges || "No especificadas"}` : "";
   }
 }
 
-async function rescheduleReservationTool({
 async function rescheduleReservationTool({
   reservation_id,
   new_slot_id,
@@ -3141,8 +3147,6 @@ app.post("/webhook", async (req, res) => {
       session.reschedule = defaultSession().reschedule;
     }
 
-    if (session.state === "await_real_tour_phone") session.state = "await_real_tour_email";
-
     if (
       ["menu", "menú", "inicio", "reiniciar", "reset", "resetear", "empezar de nuevo"].includes(tNorm)
     ) {
@@ -3278,7 +3282,8 @@ app.post("/webhook", async (req, res) => {
       }
       session.pendingDesiredDate = userText;
       session.state = "await_real_tour_adults";
-      await sendWhatsAppText(from, `Perfecto 👍\n¿Cuántos *adultos* viajarían?`);
+      await sendWhatsAppText(from, `Perfecto 👍
+¿Cuántos *adultos* viajarían?`);
       return res.sendStatus(200);
     }
 
@@ -3416,17 +3421,26 @@ Envíamelo así: nombre@correo.com`);
         lastInteractionAt: new Date().toISOString(),
       };
 
-      const agesMsg = Number(session.pendingChildren || 0) > 0 ? `\n👶 Edades: ${session.pendingChildrenAges}` : "";
+      const agesMsg = Number(session.pendingChildren || 0) > 0 ? `
+👶 Edades: ${session.pendingChildrenAges}` : "";
       const locationLine = `📍 ${groupContext.locationLabel || "Ubicación"}: ${session.pendingPickup || groupContext.fixedPickup || "—"}`;
 
       await sendWhatsAppText(
         from,
-        `✅ *Solicitud de tour recibida*\n\n` +
-          `🌴 Tour: *${tour?.title || "—"}*\n` +
-          `📅 Fecha solicitada: *${dateMeta.display || session.pendingDesiredDate || "—"}*\n` +
-          `👥 Pasajeros: *${Number(session.pendingAdults || 0) + Number(session.pendingChildren || 0)}* (${session.pendingAdults || 0} adultos / ${session.pendingChildren || 0} niños)${agesMsg}\n` +
-          `${locationLine}\n` +
-          `📧 Correo: ${session.pendingEmail || "—"}\n\n` +
+        `✅ *Solicitud de tour recibida*
+
+` +
+          `🌴 Tour: *${tour?.title || "—"}*
+` +
+          `📅 Fecha solicitada: *${dateMeta.display || session.pendingDesiredDate || "—"}*
+` +
+          `👥 Pasajeros: *${Number(session.pendingAdults || 0) + Number(session.pendingChildren || 0)}* (${session.pendingAdults || 0} adultos / ${session.pendingChildren || 0} niños)${agesMsg}
+` +
+          `${locationLine}
+` +
+          `📧 Correo: ${session.pendingEmail || "—"}
+
+` +
           `Tu solicitud quedó casi lista. Ahora un asesor de la agencia te contactará para confirmar disponibilidad, validarte el monto final y gestionar el pago.`
       );
 
@@ -3434,8 +3448,6 @@ Envíamelo así: nombre@correo.com`);
       return res.sendStatus(200);
     }
 
-    // =========================
-    // SIMPLE SERVICE FLOWS
     // =========================
     // SIMPLE SERVICE FLOWS
     // =========================

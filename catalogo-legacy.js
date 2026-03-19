@@ -173,3 +173,5 @@ export function defaultTourCatalog() {
   ];
 }
 
+const TOURS = safeJson(process.env.TOUR_CATALOG_JSON, null) || defaultTourCatalog();
+const TOUR_ID_TO_KEY = Object.fromEntries(TOURS.map((t) => [t.id, t.key]));

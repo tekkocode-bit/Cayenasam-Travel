@@ -11,7 +11,7 @@ export function quickHelpText() {
   return (
     `¡Hola! 😊\n` +
     `Puedo ayudarte con *Tours en República Dominicana*, *Boletos aéreos*, *Solo hoteles*, *Seguros de viaje* y *Traslados*.\n\n` +
-    `Escríbeme el servicio que te interesa o toca el menú para ver las opciones disponibles.`
+    `También puedes escribirme *"Tours desde Punta Cana"*, *"Tours desde Santo Domingo"*, *"Tours desde Santiago"*, *"Tours desde Las Terrenas"* o *"Tours Semana Santa"* para mostrarte las excursiones disponibles.`
   );
 }
 
@@ -36,7 +36,7 @@ export function mainMenuText({ businessName, serviceLines }) {
     `Estoy aquí para ayudarte a cotizar, comparar opciones y dejar tu solicitud casi lista para reserva y pago.\n\n` +
     `Puedo ayudarte con:\n` +
     listText +
-
+    `\n\nTambién puedes escribirme directamente *"Tours desde Santo Domingo"*, *"Tours desde Santiago"*, *"Tours desde Punta Cana"*, *"Tours desde Las Terrenas"* o *"Tours Semana Santa"* y te mostraré las excursiones disponibles en cada colección.`
   );
 }
 
