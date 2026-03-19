@@ -3,13 +3,13 @@
 // =========================
 
 export const SERVICE_LINES = [
-  { key: "tours_rd", id: "svc_tours_rd", title: "Tours en República Dominicana" },
-  { key: "boletos_aereos", id: "svc_boletos_aereos", title: "Boletos aéreos" },
-  { key: "solo_hoteles", id: "svc_solo_hoteles", title: "Solo hoteles" },
-  { key: "seguros_viaje", id: "svc_seguros_viaje", title: "Seguros de viaje" },
-  { key: "traslados", id: "svc_traslados", title: "Traslados" },
+  { key: "tours_rd", id: "svc_tours_rd", title: "🌴 Tours en República Dominicana" },
+  { key: "boletos_aereos", id: "svc_boletos_aereos", title: "✈️ Boletos aéreos" },
+  { key: "solo_hoteles", id: "svc_solo_hoteles", title: "🏨 Hoteles" },
+  { key: "seguros_viaje", id: "svc_seguros_viaje", title: "🛡 Seguros de viaje" },
+  { key: "traslados", id: "svc_traslados", title: "🚌 Traslados" },
   { key: "paquetes_vacacionales", id: "svc_paquetes_vacacionales", title: "Paquetes vacacionales" },
-  { key: "hablar_asesor", id: "svc_hablar_asesor", title: "Hablar con un asesor" },
+  { key: "hablar_asesor", id: "svc_hablar_asesor", title: "👤Hablar con un asesor" },
   { key: "ubicacion_contacto", id: "svc_ubicacion_contacto", title: "Ubicación y contacto" },
 ];
 
