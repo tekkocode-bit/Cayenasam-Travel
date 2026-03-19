@@ -2195,11 +2195,7 @@ async function sendRealToursByGroup(to, groupKey, session) {
 async function sendRealTourPresentation(to, tour) {
   if (!tour) return;
   if (tour.imageUrl) {
-    await sendWhatsAppImage(
-      to,
-      tour.imageUrl,
-      `🌴 *${tour.title}*\n📸 Imagen oficial enviada por la agencia\n📍 Revisa la pieza para ver la información comercial publicada del tour`
-    );
+    await sendWhatsAppImage(to, tour.imageUrl);
   }
   await sendWhatsAppText(to, buildRealTourInfoText(tour));
 }
