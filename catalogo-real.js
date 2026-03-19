@@ -140,13 +140,29 @@ export function buildRealToursCatalog() {
       leadOnly: true,
     },
 
-    // TOURS DESDE LAS TERRENAS (Ejemplo inicial para escalabilidad)
+    // TOURS DESDE LAS TERRENAS
     {
-      key: "terrenas_los_haitises",
-      id: "rt_terrenas_los_haitises",
-      title: "Parque Nacional Los Haitises",
+      key: "terrenas_ruta_cafe_salto_limon",
+      id: "rt_terrenas_ruta_cafe_salto_limon",
+      title: "Ruta del Café + Salto El Limón",
       groupKey: "tours_las_terrenas",
-      imageUrl: "", // Puedes agregar el link aquí en el futuro
+      imageUrl: "",
+      leadOnly: true,
+    },
+    {
+      key: "terrenas_3_playas_las_galeras",
+      id: "rt_terrenas_3_playas_las_galeras",
+      title: "3 Playas en Las Galeras",
+      groupKey: "tours_las_terrenas",
+      imageUrl: "",
+      leadOnly: true,
+    },
+    {
+      key: "terrenas_3_playas_las_terrenas",
+      id: "rt_terrenas_3_playas_las_terrenas",
+      title: "3 Playas en Las Terrenas",
+      groupKey: "tours_las_terrenas",
+      imageUrl: "",
       leadOnly: true,
     },
     {
@@ -154,11 +170,52 @@ export function buildRealToursCatalog() {
       id: "rt_terrenas_cascada_limon",
       title: "Salto El Limón",
       groupKey: "tours_las_terrenas",
-      imageUrl: "", // Puedes agregar el link aquí en el futuro
+      imageUrl: "",
+      leadOnly: true,
+    },
+    {
+      key: "terrenas_santo_domingo_casco_historico_tres_ojos",
+      id: "rt_terrenas_santo_domingo_casco_historico_tres_ojos",
+      title: "Santo Domingo + Casco Histórico + Los 3 Ojos",
+      groupKey: "tours_las_terrenas",
+      imageUrl: "",
+      leadOnly: true,
+    },
+    {
+      key: "terrenas_los_haitises",
+      id: "rt_terrenas_los_haitises",
+      title: "Los Haitises + Cayo Levantado",
+      groupKey: "tours_las_terrenas",
+      imageUrl: "",
+      leadOnly: true,
+    },
+    {
+      key: "terrenas_renta_cuatrimoto",
+      id: "rt_terrenas_renta_cuatrimoto",
+      title: "Renta de Cuatrimoto",
+      groupKey: "tours_las_terrenas",
+      imageUrl: "",
       leadOnly: true,
     },
 
     // TOURS DESDE PUNTA CANA
+
+    {
+      key: "pc_santo_domingo_casco_historico_tres_ojos",
+      id: "rt_pc_santo_domingo_casco_historico_tres_ojos",
+      title: "Santo Domingo + Casco Histórico + Los 3 Ojos",
+      groupKey: "tours_punta_cana",
+      imageUrl: "",
+      leadOnly: true,
+    },
+    {
+      key: "pc_los_haitises_cayo_levantado",
+      id: "rt_pc_los_haitises_cayo_levantado",
+      title: "Los Haitises + Cayo Levantado",
+      groupKey: "tours_punta_cana",
+      imageUrl: "",
+      leadOnly: true,
+    },
     {
       key: "pc_scoobadoo",
       id: "rt_pc_scoobadoo",
@@ -366,21 +423,21 @@ export const REAL_TOUR_TEXT_OVERRIDES = {
   },
   "pc_maroca": {
     "priceText": "US$65 por persona.",
-    "dateText": "Open bar.",
+    "dateText": "Todos los días.",
     "pickupText": "Traslado desde tu hotel en Punta Cana.",
     "includesText": "Admisión y experiencia nocturna con open bar según la promoción publicada.",
     "noteText": "La imagen muestra esta opción como una salida de entretenimiento en Punta Cana."
   },
   "pc_jet_ski": {
     "priceText": "US$99 por adulto.",
-    "dateText": "Promoción nueva.",
+    "dateText": "Todos los días.",
     "pickupText": "Traslado desde tu hotel en Punta Cana.",
     "includesText": "Experiencia Jet Ski y actividades acuáticas según la promoción visual.",
     "noteText": "La imagen oficial destaca esta excursión como promoción nueva."
   },
   "pc_jet_cars": {
     "priceText": "US$165 por adulto.",
-    "dateText": "Promoción nueva.",
+    "dateText": "Todos los días.",
     "pickupText": "Traslado desde tu hotel en Punta Cana.",
     "includesText": "Experiencia Jet Cars y actividades acuáticas según la promoción publicada.",
     "noteText": "La imagen oficial muestra esta opción como novedad dentro del catálogo."
@@ -408,14 +465,14 @@ export const REAL_TOUR_TEXT_OVERRIDES = {
   },
   "pc_dorado_park": {
     "priceText": "Adultos US$129 / Niños US$69.",
-    "dateText": "Jueves a domingo.",
+    "dateText": "Todos los días.",
     "pickupText": "Traslado desde tu hotel en Punta Cana.",
     "includesText": "Acceso al parque, playa artificial y atracciones mostradas en la promoción oficial.",
     "noteText": "La imagen de la agencia muestra este producto con disponibilidad de jueves a domingo."
   },
   "pc_dolphin_ocean_adventure": {
     "priceText": "Encounters US$120 / Swim US$169 / Royal Swim US$239.",
-    "dateText": "Martes, jueves y sábados.",
+    "dateText": "Todos los días.",
     "durationText": "Duración estimada: 5 horas.",
     "pickupText": "Traslado desde tu hotel en Punta Cana.",
     "includesText": "Programas con delfines según el paquete elegido: Encounter, Swim o Royal Swim.",
@@ -443,14 +500,14 @@ export const REAL_TOUR_TEXT_OVERRIDES = {
   },
   "pc_jet_ski_aqua_kart_polaris": {
     "priceText": "US$169 por adulto.",
-    "dateText": "Promoción nueva.",
+    "dateText": "Todos los días.",
     "pickupText": "Traslado desde tu hotel en Punta Cana.",
     "includesText": "Combo con Jet Ski, Aqua Kart y Polaris según la pieza promocional de la agencia.",
     "noteText": "La imagen oficial presenta esta excursión como paquete combinado."
   },
   "pc_jet_ski_aqua_kart": {
     "priceText": "US$129 por adulto.",
-    "dateText": "Promoción nueva.",
+    "dateText": "Todos los días.",
     "pickupText": "Traslado desde tu hotel en Punta Cana.",
     "includesText": "Combo con Jet Ski y Aqua Kart según la promoción publicada por la agencia.",
     "noteText": "La pieza oficial presenta esta excursión como paquete combinado."
@@ -462,6 +519,70 @@ export const REAL_TOUR_TEXT_OVERRIDES = {
     "includesText": "Paseo en barco, snorkel para corales y piscina natural según la promoción oficial.",
     "noteText": "La imagen compartida por la agencia indica salida diaria para esta experiencia."
   },
+  "terrenas_ruta_cafe_salto_limon": {
+    "priceText": "US$90 por persona.",
+    "dateText": "Todos los días.",
+    "pickupText": "Salida desde Las Terrenas según coordinación de la agencia.",
+    "includesText": "Ruta del café, Salto El Limón, almuerzo, guía, cuatrimoto, agua y refresco.",
+    "noteText": "Tour agregado con la información suministrada por la clienta; la imagen oficial puede cargarse más adelante."
+  },
+  "terrenas_3_playas_las_galeras": {
+    "priceText": "US$90 por persona.",
+    "dateText": "Todos los días.",
+    "pickupText": "Transporte desde tu hotel o ubicación en Las Terrenas según coordinación.",
+    "includesText": "Visita a Frontón, Madama y Rincón, con almuerzo incluido.",
+    "noteText": "La información de este tour fue cargada con base en la lista enviada por la clienta."
+  },
+  "terrenas_3_playas_las_terrenas": {
+    "priceText": "US$90 por persona.",
+    "dateText": "Todos los días.",
+    "pickupText": "Salida desde Las Terrenas según coordinación de la agencia.",
+    "includesText": "Recorrido por Ermitaño, Las Canas y Morón, con almuerzo, guía y bebidas nacionales.",
+    "noteText": "La información de este tour fue cargada con base en la lista enviada por la clienta."
+  },
+  "terrenas_cascada_limon": {
+    "priceText": "US$65 por persona.",
+    "dateText": "Todos los días.",
+    "pickupText": "Transporte desde tu hotel o ubicación en Las Terrenas según coordinación.",
+    "includesText": "Transporte, caballo, guía, disfrute del salto y almuerzo.",
+    "noteText": "La imagen oficial de este tour puede agregarse más adelante."
+  },
+  "terrenas_santo_domingo_casco_historico_tres_ojos": {
+    "priceText": "US$80 por persona.",
+    "dateText": "Todos los días.",
+    "pickupText": "Salida desde Las Terrenas según coordinación de la agencia.",
+    "includesText": "Visita a Los 3 Ojos, cuevas, lancha subterránea, casco histórico, guía y entradas a lugares históricos.",
+    "noteText": "Este es el mismo tour de Santo Domingo + Casco Histórico + Los 3 Ojos cargado para la salida desde Las Terrenas."
+  },
+  "terrenas_los_haitises": {
+    "priceText": "US$80 por persona.",
+    "dateText": "Todos los días.",
+    "pickupText": "Salida desde Las Terrenas según coordinación de la agencia.",
+    "includesText": "Tour a Los Haitises + Cayo Levantado. Información detallada en proceso de confirmación por la agencia.",
+    "noteText": "Se dejó con ficha simple por ahora para no frenar la carga al bot."
+  },
+  "terrenas_renta_cuatrimoto": {
+    "priceText": "US$50 regular / US$150 en Semana Santa.",
+    "dateText": "Todos los días.",
+    "pickupText": "Salida desde Las Terrenas según coordinación de la agencia.",
+    "includesText": "Renta de cuatrimoto. Detalles de duración e inclusiones pendientes de confirmación.",
+    "noteText": "La clienta indicó precio regular y precio especial de Semana Santa; el resto de detalles queda pendiente."
+  },
+  "pc_santo_domingo_casco_historico_tres_ojos": {
+    "priceText": "US$80 por persona.",
+    "dateText": "Todos los viernes.",
+    "pickupText": "Traslado desde tu hotel en Punta Cana según coordinación de la agencia.",
+    "includesText": "Visita a Los 3 Ojos, cuevas, lancha subterránea, casco histórico, guía y entradas a lugares históricos.",
+    "noteText": "Es el mismo tour de Santo Domingo + Casco Histórico + Los 3 Ojos cargado para salida desde Punta Cana."
+  },
+  "pc_los_haitises_cayo_levantado": {
+    "priceText": "US$125 por persona.",
+    "dateText": "Todos los días.",
+    "pickupText": "Traslado desde tu hotel en Punta Cana según coordinación de la agencia.",
+    "includesText": "Tour a Los Haitises + Cayo Levantado. Información detallada en proceso de confirmación por la agencia.",
+    "noteText": "Se dejó con ficha simple por ahora para no frenar la carga al bot."
+  },
+
   // TOURS DESDE SANTO DOMINGO
   "sd_santa_fe_full_day": {
     "priceText": "RD$3,750 adultos / RD$3,300 niños.",
@@ -512,6 +633,7 @@ export const REAL_TOUR_TEXT_OVERRIDES = {
   },
   "sd_cayo_levantado": {
     "priceText": "RD$2,950 por persona.",
+    "dateText": "Sábados y domingos.",
     "includesText": "Transporte, desayuno, almuerzo y visita a Cayo Levantado.",
   },
   "sd_buggies_punta_cana": {

@@ -1539,15 +1539,34 @@ function parseRealTourDateInput(rawText) {
 function getRealTourAvailability(tour) {
   const details = getRealTourTextDetails(tour) || {};
   const configured = details?.availability;
-  if (configured && typeof configured === "object" && configured.type) {
-    return configured;
-  }
-
   const rawDateText = normalizeText(details?.dateText || "");
   const titleNorm = normalizeText(tour?.title || "");
 
+  if (configured && typeof configured === "object" && configured.type === "dates") {
+    return configured;
+  }
+
   if (tour?.groupKey === "tours_semana_santa" || rawDateText.includes("semana santa")) {
     return { type: "holy_week", label: details?.dateText || "Semana Santa" };
+  }
+
+  if (tour?.groupKey === "tours_santo_domingo") {
+    return { type: "weekdays", allowedWeekdays: [6, 7], label: details?.dateText || "Sábados y domingos." };
+  }
+
+  if (tour?.groupKey === "tours_las_terrenas") {
+    return { type: "daily", label: details?.dateText || "Todos los días." };
+  }
+
+  if (tour?.groupKey === "tours_punta_cana") {
+    if (titleNorm.includes("santo domingo") && titleNorm.includes("3 ojos")) {
+      return { type: "weekdays", allowedWeekdays: [5], label: details?.dateText || "Todos los viernes." };
+    }
+    return { type: "daily", label: details?.dateText || "Todos los días." };
+  }
+
+  if (configured && typeof configured === "object" && configured.type) {
+    return configured;
   }
 
   if (rawDateText.includes("todos los dias")) {
@@ -1584,14 +1603,6 @@ function getRealTourAvailability(tour) {
       allowedDates: Array.isArray(configured?.allowedDates) ? configured.allowedDates : [],
       label: details?.dateText || "Fechas vigentes",
     };
-  }
-
-  if (tour?.groupKey === "tours_las_terrenas" && titleNorm.includes("santo domingo") && titleNorm.includes("3 ojos")) {
-    return { type: "weekdays", allowedWeekdays: [6], label: "Todos los sábados." };
-  }
-
-  if (tour?.groupKey === "tours_punta_cana" && titleNorm.includes("santo domingo") && titleNorm.includes("3 ojos")) {
-    return { type: "weekdays", allowedWeekdays: [5], label: "Todos los viernes." };
   }
 
   return null;
@@ -2110,7 +2121,7 @@ function buildLocationContactText() {
 
 function getRealTourGroupIntro(groupKey) {
   if (groupKey === "tours_punta_cana") {
-    return "Excursiones y actividades disponibles para disfrutar saliendo desde Punta Cana. Salidas diarias.";
+    return "Excursiones y actividades disponibles para disfrutar saliendo desde Punta Cana. Salidas diarias, excepto los tours especiales que indiquen otro día específico.";
   }
   if (groupKey === "tours_santo_domingo") {
     return "Selección de excursiones saliendo desde Santo Domingo. Salidas: Sábados y Domingos (Punto de encuentro: Sambil 5:00 AM).";
