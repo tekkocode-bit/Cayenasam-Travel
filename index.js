@@ -808,7 +808,7 @@ function isGreeting(textNorm) {
 function quickHelpText() {
   return (
     `¡Hola! 😊\n` +
-    `Puedo ayudarte con *Tours en República Dominicana*, *Boletos aéreos*, *Solo hoteles*, *Seguros de viaje* y *Traslados*.\n\n` +
+    `Puedo ayudarte con *Tours en República Dominicana*, *Boletos aéreos*, *Hoteles*, *Seguros de viaje* y *Traslados*.\n\n` +
     `También puedes escribirme ${formatVisibleRealTourGroupsInline()} para mostrarte las excursiones disponibles.`
   );
 }
@@ -978,7 +978,7 @@ function serviceLineRowTitle(service) {
   const map = {
     tours_rd: "Tours RD",
     boletos_aereos: "Boletos aéreos",
-    solo_hoteles: "Solo hoteles",
+    solo_hoteles: "Hoteles",
     seguros_viaje: "Seguros de viaje",
     traslados: "Traslados",
     paquetes_vacacionales: "Paquetes",
@@ -1889,10 +1889,10 @@ Ahora dime tu *nombre completo*.` },
   {
     serviceLineKey: "solo_hoteles",
     startState: "await_hotel_destination",
-    startPrompt: `Perfecto 🏨 Vamos con *solo hoteles*.
+    startPrompt: `Perfecto 🏨 Vamos con *Hoteles*.
 
 ¿En qué *destino o ciudad* deseas hospedarte?`,
-    summaryTitle: "Nueva solicitud de solo hoteles",
+    summaryTitle: "Nueva solicitud de hoteles",
     buildSummaryFields: (session, phoneDigits) => [
       { label: "🧩 Servicio", value: serviceLineLabel("solo_hoteles") },
       { label: "🌍 Destino", value: session.pendingDestination || "—" },
@@ -1906,7 +1906,7 @@ Ahora dime tu *nombre completo*.` },
     buildConfirmationText: (session) =>
       `✅ *Solicitud recibida*
 
-Recibí tu solicitud de *solo hoteles* y nuestro equipo te contactará con opciones según:
+Recibí tu solicitud de *hoteles* y nuestro equipo te contactará con opciones según:
 ` +
       `• destino: ${session.pendingDestination || "—"}
 ` +
@@ -2510,7 +2510,7 @@ async function sendCatalogDocument(to) {
   if (!CATALOG_DOCUMENT_URL) {
     await sendWhatsAppText(
       to,
-      `Todavía no tengo el documento cargado aquí 🙏\n\nMientras tanto, dime si buscas *Tours en República Dominicana*, *Boletos aéreos*, *Solo hoteles*, *Seguros de viaje*, *Traslados* o *Paquetes vacacionales* y te ayudo por el flujo normal.`
+      `Todavía no tengo el documento cargado aquí 🙏\n\nMientras tanto, dime si buscas *Tours en República Dominicana*, *Boletos aéreos*, *Hoteles*, *Seguros de viaje*, *Traslados* o *Paquetes vacacionales* y te ayudo por el flujo normal.`
     );
     return;
   }
@@ -3172,7 +3172,7 @@ function tryPickSlotFromUserText(session, userText) {
 async function callOpenAI({ session, userText, userPhone, extraSystem = "" }) {
   if (!OPENAI_API_KEY) {
     const fallback =
-      `Puedo ayudarte con *Tours en República Dominicana*, *Boletos aéreos*, *Solo hoteles*, *Seguros de viaje* y *Traslados*.\n\n` +
+      `Puedo ayudarte con *Tours en República Dominicana*, *Boletos aéreos*, *Hoteles*, *Seguros de viaje* y *Traslados*.\n\n` +
       `Escribe *"menú"* para ver las opciones.`;
     session.messages.push({ role: "assistant", content: fallback });
     return fallback;
@@ -3189,7 +3189,7 @@ Eres un asistente de WhatsApp de ${BUSINESS_NAME}.
 Servicios:
 - Tours en República Dominicana
 - Boletos aéreos
-- Solo hoteles
+- Hoteles
 - Seguros de viaje
 - Traslados
 - Paquetes vacacionales
