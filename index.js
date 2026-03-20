@@ -64,6 +64,11 @@ const REMINDER_2H = (process.env.REMINDER_2H || "1") === "1";
 const FOLLOWUP_ENABLED = (process.env.FOLLOWUP_ENABLED || "1") === "1";
 const FOLLOWUP_AFTER_MIN = parseInt(process.env.FOLLOWUP_AFTER_MIN || "180", 10);
 const FOLLOWUP_MAX_AGE_HOURS = parseInt(process.env.FOLLOWUP_MAX_AGE_HOURS || "72", 10);
+const MENU_INACTIVITY_REMINDER_ENABLED = (process.env.MENU_INACTIVITY_REMINDER_ENABLED || "1") === "1";
+const MENU_REMINDER_1_AFTER_MIN = parseInt(process.env.MENU_REMINDER_1_AFTER_MIN || "30", 10);
+const MENU_REMINDER_2_AFTER_MIN = parseInt(process.env.MENU_REMINDER_2_AFTER_MIN || "1440", 10);
+const MENU_REMINDER_MAX_AGE_HOURS = parseInt(process.env.MENU_REMINDER_MAX_AGE_HOURS || "48", 10);
+
 
 const PERSONAL_WA_TO = (process.env.PERSONAL_WA_TO || "").trim();
 const ADMIN_WA_TO = (process.env.ADMIN_WA_TO || process.env.ADMIN_PHONE || process.env.PERSONAL_WA_TO || "").trim();
@@ -135,6 +140,15 @@ const redis = redisUrl
 
 const sessions = new Map();
 
+function defaultMenuReminder() {
+  return {
+    active: false,
+    menuShownAt: "",
+    reminder1Sent: false,
+    reminder2Sent: false,
+  };
+}
+
 function defaultLead() {
   return {
     tour_key: "",
@@ -188,6 +202,8 @@ function defaultSession() {
     lastBooking: null,
     greeted: false,
     lastMsgId: null,
+    lastUserMessageAt: "",
+    menuReminder: defaultMenuReminder(),
 
     lead: defaultLead(),
 
@@ -244,8 +260,18 @@ function sanitizeSession(session) {
     if (typeof session.reschedule.city !== "string") session.reschedule.city = "";
   }
 
-  if (typeof session.state !== "string") session.state = "idle";
-  if (typeof session.greeted !== "boolean") session.greeted = false;
+if (typeof session.state !== "string") session.state = "idle";
+if (typeof session.greeted !== "boolean") session.greeted = false;
+if (typeof session.lastUserMessageAt !== "string") session.lastUserMessageAt = "";
+
+if (!session.menuReminder || typeof session.menuReminder !== "object") {
+  session.menuReminder = defaultMenuReminder();
+} else {
+  if (typeof session.menuReminder.active !== "boolean") session.menuReminder.active = false;
+  if (typeof session.menuReminder.menuShownAt !== "string") session.menuReminder.menuShownAt = "";
+  if (typeof session.menuReminder.reminder1Sent !== "boolean") session.menuReminder.reminder1Sent = false;
+  if (typeof session.menuReminder.reminder2Sent !== "boolean") session.menuReminder.reminder2Sent = false;
+}
 
   const maybeStringOrNull = [
     "pendingServiceLine",
@@ -375,6 +401,31 @@ function clearIntakeFlow(session) {
   session.pendingTransferRoute = null;
   session.pendingAdvisorTopic = null;
 }
+
+function disableMenuInactivityReminder(session) {
+  session.menuReminder = defaultMenuReminder();
+}
+
+function armMenuInactivityReminder(session) {
+  session.menuReminder = {
+    active: true,
+    menuShownAt: new Date().toISOString(),
+    reminder1Sent: false,
+    reminder2Sent: false,
+  };
+}
+
+function markUserActivity(session) {
+  session.lastUserMessageAt = new Date().toISOString();
+}
+
+function hasUserRespondedAfterMenu(session) {
+  const shownAt = Date.parse(session?.menuReminder?.menuShownAt || "");
+  const lastUserAt = Date.parse(session?.lastUserMessageAt || "");
+  if (!Number.isFinite(shownAt) || !Number.isFinite(lastUserAt)) return false;
+  return lastUserAt > shownAt;
+}
+
 
 // =====================================================
 // Stable stringify
@@ -3365,6 +3416,8 @@ app.post("/webhook", async (req, res) => {
     if (msgId && session.lastMsgId === msgId) return res.sendStatus(200);
     if (msgId) session.lastMsgId = msgId;
 
+    markUserActivity(session);
+
     const userTextRaw = extractIncomingText(msg);
     const userText = (userTextRaw || "").trim();
     const tNorm = normalizeText(userText);
@@ -3423,6 +3476,7 @@ app.post("/webhook", async (req, res) => {
 
     if (!session.greeted && session.state === "idle" && isGreeting(tNorm) && !hasEarlyIntent) {
       session.greeted = true;
+      armMenuInactivityReminder(session);
       await sendWhatsAppText(from, mainMenuText());
       await sendServiceLinesList(from);
       return res.sendStatus(200);
@@ -3455,6 +3509,7 @@ app.post("/webhook", async (req, res) => {
       clearIntakeFlow(session);
       session.lastBooking = null;
       session.reschedule = defaultSession().reschedule;
+      armMenuInactivityReminder(session);
       await sendWhatsAppText(from, mainMenuText());
       await sendServiceLinesList(from);
       return res.sendStatus(200);
@@ -3503,6 +3558,7 @@ app.post("/webhook", async (req, res) => {
 
       if (session.state === "await_tour_group" || session.pendingServiceLine === "tours_rd") {
         clearIntakeFlow(session);
+        armMenuInactivityReminder(session);
         await sendWhatsAppText(from, mainMenuText());
         await sendServiceLinesList(from);
         return res.sendStatus(200);
@@ -3510,6 +3566,7 @@ app.post("/webhook", async (req, res) => {
 
       if (session.state !== "idle") {
         clearIntakeFlow(session);
+        armMenuInactivityReminder(session);
         await sendWhatsAppText(from, mainMenuText());
         await sendServiceLinesList(from);
         return res.sendStatus(200);
@@ -3517,6 +3574,7 @@ app.post("/webhook", async (req, res) => {
     }
 
     if (detectCatalogRequest(tNorm)) {
+      disableMenuInactivityReminder(session);
       await sendCatalogDocument(from);
       return res.sendStatus(200);
     }
@@ -3535,6 +3593,7 @@ app.post("/webhook", async (req, res) => {
         return res.sendStatus(200);
       }
 
+      disableMenuInactivityReminder(session);
       session.pendingServiceLine = "tours_rd";
       session.pendingRealTourGroup = groupKey;
       session.state = "await_real_tour_choice";
@@ -3545,6 +3604,7 @@ app.post("/webhook", async (req, res) => {
     if (session.state === "await_real_tour_choice") {
       const anotherGroup = detectRealTourGroupFromUser(userText, { allowBareOrigin: true });
       if (anotherGroup) {
+        disableMenuInactivityReminder(session);
         session.pendingRealTourGroup = anotherGroup;
         await sendRealToursByGroup(from, anotherGroup, session);
         return res.sendStatus(200);
@@ -3559,6 +3619,7 @@ app.post("/webhook", async (req, res) => {
         return res.sendStatus(200);
       }
 
+      disableMenuInactivityReminder(session);
       session.pendingRealTourKey = pickedTour.key;
       session.pendingRealTourGroup = pickedTour.groupKey;
       updateLead(session, {
@@ -3762,12 +3823,14 @@ Envíamelo así: nombre@correo.com`);
     // FAST ROUTES / MENUS
     // =========================
     if (tNorm.includes("menu") || tNorm.includes("menú") || tNorm.includes("servicios") || tNorm.includes("ver opciones") || tNorm.includes("inicio")) {
+      armMenuInactivityReminder(session);
       await sendWhatsAppText(from, mainMenuText());
       await sendServiceLinesList(from);
       return res.sendStatus(200);
     }
 
     if (tNorm.includes("categorias") || tNorm.includes("categorías") || tNorm.includes("ver tours")) {
+      disableMenuInactivityReminder(session);
       session.pendingServiceLine = "tours_rd";
       session.state = "await_tour_group";
       await sendWhatsAppText(from, categoriesEmojiText());
@@ -3778,6 +3841,7 @@ Envíamelo así: nombre@correo.com`);
     const directRealTourGroup = detectRealTourGroupFromUser(userText);
     if (directRealTourGroup) {
       clearIntakeFlow(session);
+      disableMenuInactivityReminder(session);
       session.pendingServiceLine = "tours_rd";
       session.pendingRealTourGroup = directRealTourGroup;
       session.state = "await_real_tour_choice";
@@ -3791,6 +3855,7 @@ Aquí tienes las excursiones disponibles en *${getRealTourGroupByKey(directRealT
     if (directRealTourKey) {
       const tour = getRealTourByKey(directRealTourKey);
       clearIntakeFlow(session);
+      disableMenuInactivityReminder(session);
       session.pendingServiceLine = "tours_rd";
       session.pendingRealTourGroup = tour?.groupKey || null;
       session.pendingRealTourKey = directRealTourKey;
@@ -3804,6 +3869,7 @@ Aquí tienes las excursiones disponibles en *${getRealTourGroupByKey(directRealT
     const serviceLineKey = detectServiceLineFromUser(userText);
     if (serviceLineKey) {
       clearIntakeFlow(session);
+      disableMenuInactivityReminder(session);
       session.pendingServiceLine = serviceLineKey;
 
       if (serviceLineKey === "catalogo_pdf") {
@@ -4002,10 +4068,83 @@ ${summaryText}`;
   }
 }
 
+async function menuInactivityReminderLoop() {
+  try {
+    if (!MENU_INACTIVITY_REMINDER_ENABLED) return;
+
+    const ids = await listAllSessionIds();
+    const now = Date.now();
+    const maxAgeMs = MENU_REMINDER_MAX_AGE_HOURS * 60 * 60 * 1000;
+    const reminder1Ms = MENU_REMINDER_1_AFTER_MIN * 60 * 1000;
+    const reminder2Ms = MENU_REMINDER_2_AFTER_MIN * 60 * 1000;
+
+    for (const id of ids) {
+      const s = await getSession(id);
+      const reminder = s?.menuReminder || {};
+      if (!reminder.active || !reminder.menuShownAt) continue;
+      if (s?.pendingServiceLine || s?.state !== "idle") {
+        disableMenuInactivityReminder(s);
+        await saveSession(id, s);
+        continue;
+      }
+      if (hasUserRespondedAfterMenu(s)) {
+        disableMenuInactivityReminder(s);
+        await saveSession(id, s);
+        continue;
+      }
+
+      const shownAtMs = Date.parse(reminder.menuShownAt || "");
+      if (!Number.isFinite(shownAtMs)) {
+        disableMenuInactivityReminder(s);
+        await saveSession(id, s);
+        continue;
+      }
+
+      const ageMs = now - shownAtMs;
+      if (ageMs < 0 || ageMs > maxAgeMs) {
+        disableMenuInactivityReminder(s);
+        await saveSession(id, s);
+        continue;
+      }
+
+      if (!reminder.reminder1Sent && ageMs >= reminder1Ms) {
+        const msg = `Hola 👋 Quedamos disponibles para ayudarte con tu viaje.
+
+Escribe *menú* y te muestro las opciones disponibles.`;
+        try {
+          await sendWhatsAppText(id, msg, "BOT");
+          s.menuReminder.reminder1Sent = true;
+          await saveSession(id, s);
+        } catch (e) {
+          console.error("menu reminder 1 send error:", id, e?.response?.data || e?.message || e);
+        }
+        continue;
+      }
+
+      if (reminder.reminder1Sent && !reminder.reminder2Sent && ageMs >= reminder2Ms) {
+        const msg = `Seguimos aquí para ayudarte con tours, hoteles, boletos, seguros o traslados.
+
+Si deseas retomar, escribe *menú*.`;
+        try {
+          await sendWhatsAppText(id, msg, "BOT");
+          s.menuReminder.reminder2Sent = true;
+          disableMenuInactivityReminder(s);
+          await saveSession(id, s);
+        } catch (e) {
+          console.error("menu reminder 2 send error:", id, e?.response?.data || e?.message || e);
+        }
+      }
+    }
+  } catch (e) {
+    console.error("menuInactivityReminderLoop error:", e?.response?.data || e?.message || e);
+  }
+}
+
 app.get("/tick", async (_req, res) => {
   try {
     await reminderLoop();
     await followupLeadsLoop();
+    await menuInactivityReminderLoop();
   } catch {}
   return res.status(200).send("tick ok");
 });
