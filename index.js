@@ -2083,9 +2083,15 @@ Recibí tu solicitud de *paquete vacacional* y nuestro equipo te contactará con
       `• personas: ${session.pendingPassengers || "—"}`,
     steps: [
       { state: "await_package_destination", kind: "packageDestination", field: "pendingDestination", nextState: "await_package_date", invalidPrompt: `No pude identificar el paquete 🙏
-Responde con el *número* o con el *nombre* exacto del paquete.`, prompt: `Perfecto 🎒
-Ahora dime la *fecha* o *temporada* que te interesa.
-Ej: "julio", "semana santa", "15 de agosto".` },
+Responde con el *número* o con el *nombre* exacto del paquete.`, assign: (session, value, userText) => {
+        const selected = parsePackageChoice(session, userText);
+        session.pendingDestination = selected?.title || value;
+        session.pendingPackageKey = selected?.key || null;
+      }, afterValid: async ({ session, from }) => {
+        const selected = getPackageDestinationByKey(session.pendingPackageKey);
+        await sendPackagePresentation(from, selected);
+        await sendWhatsAppText(from, `📅 Si deseas agendar *${selected?.title || "este paquete"}*, dime la *fecha* o *temporada* que te interesa y seguimos con tu solicitud.`);
+      } },
       { state: "await_package_date", kind: "text", minLen: 2, field: "pendingTravelDateText", nextState: "await_package_people", invalidPrompt: `Por favor, indícame la *fecha* o *temporada* que te interesa.`, prompt: `Gracias. ¿Para cuántas *personas* sería el paquete?` },
       { state: "await_package_people", kind: "count", minValue: 1, field: "pendingPassengers", nextState: "await_package_name", invalidPrompt: `Indícame cuántas *personas* viajarían. Ej: 2`, prompt: `Perfecto 👍
 Ahora dime tu *nombre completo*.` },
