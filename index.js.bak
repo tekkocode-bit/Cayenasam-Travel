@@ -92,12 +92,6 @@ const BOTHUB_WEBHOOK_URL = (process.env.BOTHUB_WEBHOOK_URL || "").trim();
 const BOTHUB_WEBHOOK_SECRET = (process.env.BOTHUB_WEBHOOK_SECRET || "").trim();
 const BOTHUB_TIMEOUT_MS = Number(process.env.BOTHUB_TIMEOUT_MS || 6000);
 
-const BOTHUB_API_BASE_URL = (process.env.BOTHUB_API_BASE_URL || process.env.CRM_API_BASE_URL || "").trim();
-const BOTHUB_JWT_TOKEN = (process.env.BOTHUB_JWT_TOKEN || process.env.CRM_JWT_TOKEN || "").trim();
-const BOTHUB_BOT_ID = (process.env.BOTHUB_BOT_ID || "").trim();
-const HUB_QUEUE_SERVICE_TOURS = (process.env.HUB_QUEUE_SERVICE_TOURS || "Servicio al cliente / Tours").trim();
-const HUB_QUEUE_COMMERCIAL = (process.env.HUB_QUEUE_COMMERCIAL || "Asesoría comercial").trim();
-
 const BOT_PUBLIC_BASE_URL = (process.env.BOT_PUBLIC_BASE_URL || "").replace(/\/$/, "");
 const HUB_MEDIA_SECRET =
   (process.env.HUB_MEDIA_SECRET || BOTHUB_WEBHOOK_SECRET || VERIFY_TOKEN || "").trim();
@@ -245,7 +239,6 @@ function defaultSession() {
     lastUserMessageAt: "",
     menuReminder: defaultMenuReminder(),
     conversationMode: "bot",
-    bothubConversationId: "",
     lastInboundMediaKind: "",
     lastInboundMediaSummary: "",
     lastInboundTranscript: "",
@@ -309,7 +302,6 @@ if (typeof session.state !== "string") session.state = "idle";
 if (typeof session.greeted !== "boolean") session.greeted = false;
 if (typeof session.lastUserMessageAt !== "string") session.lastUserMessageAt = "";
 if (session.conversationMode !== "human" && session.conversationMode !== "bot") session.conversationMode = "bot";
-if (typeof session.bothubConversationId !== "string") session.bothubConversationId = "";
 if (typeof session.lastInboundMediaKind !== "string") session.lastInboundMediaKind = "";
 if (typeof session.lastInboundMediaSummary !== "string") session.lastInboundMediaSummary = "";
 if (typeof session.lastInboundTranscript !== "string") session.lastInboundTranscript = "";
@@ -543,14 +535,14 @@ function verifyHubSignature(reqBody, signatureHex, secret) {
 }
 
 async function bothubReportMessage(payload) {
-  if (!BOTHUB_WEBHOOK_URL || !BOTHUB_WEBHOOK_SECRET) return null;
+  if (!BOTHUB_WEBHOOK_URL || !BOTHUB_WEBHOOK_SECRET) return;
 
   try {
     const cleanPayload = removeUndefinedDeep(payload);
     const raw = stableStringify(cleanPayload);
     const sig = crypto.createHmac("sha256", BOTHUB_WEBHOOK_SECRET).update(raw).digest("hex");
 
-    const response = await axios.post(BOTHUB_WEBHOOK_URL, raw, {
+    await axios.post(BOTHUB_WEBHOOK_URL, raw, {
       headers: {
         "Content-Type": "application/json",
         "X-HUB-SIGNATURE": sig,
@@ -558,96 +550,8 @@ async function bothubReportMessage(payload) {
       timeout: BOTHUB_TIMEOUT_MS,
       transformRequest: [(data) => data],
     });
-
-    return response?.data || null;
   } catch (e) {
     console.error("Bothub report failed:", e?.response?.data || e?.message || e);
-    return null;
-  }
-}
-
-function extractConversationIdFromBothubResponse(data) {
-  if (!data || typeof data !== "object") return "";
-  const candidates = [
-    data.conversationId,
-    data.conversation?.id,
-    data.data?.conversationId,
-    data.data?.conversation?.id,
-    data.item?.conversationId,
-    data.item?.conversation?.id,
-  ];
-  const found = candidates.find((v) => typeof v === "string" && v.trim());
-  return found ? String(found).trim() : "";
-}
-
-function resolveBothubApiBaseUrl() {
-  const explicit = String(BOTHUB_API_BASE_URL || "").trim();
-  if (explicit) return explicit.replace(/\/$/, "");
-
-  const webhook = String(BOTHUB_WEBHOOK_URL || "").trim();
-  if (!webhook) return "";
-
-  try {
-    const parsed = new URL(webhook);
-    return `${parsed.protocol}//${parsed.host}`;
-  } catch {
-    return "";
-  }
-}
-
-function resolveBothubBotId() {
-  const explicit = String(BOTHUB_BOT_ID || "").trim();
-  if (explicit) return explicit;
-
-  const webhook = String(BOTHUB_WEBHOOK_URL || "").trim();
-  if (!webhook) return "";
-  const parts = webhook.split("/").filter(Boolean);
-  return parts[parts.length - 1] || "";
-}
-
-function normalizeJwtBearer(token) {
-  const raw = String(token || "").trim();
-  if (!raw) return "";
-  return /^Bearer\s+/i.test(raw) ? raw : `Bearer ${raw}`;
-}
-
-async function routeConversationToQueue({ session, phone, queueName, reason = "service_selection" }) {
-  try {
-    const queue = String(queueName || "").trim();
-    if (!queue || !session || typeof session !== "object") return false;
-
-    const conversationId = String(session.bothubConversationId || "").trim();
-    if (!conversationId) {
-      console.warn("routeConversationToQueue skipped: missing conversationId", { phone, queue, reason });
-      return false;
-    }
-
-    const apiBase = resolveBothubApiBaseUrl();
-    if (!apiBase) {
-      console.warn("routeConversationToQueue skipped: missing api base", { phone, queue, reason });
-      return false;
-    }
-
-    const auth = normalizeJwtBearer(BOTHUB_JWT_TOKEN);
-    if (!auth) {
-      console.warn("routeConversationToQueue skipped: missing jwt token", { phone, queue, reason });
-      return false;
-    }
-
-    const patchUrl = `${apiBase}/api/conversations/${encodeURIComponent(conversationId)}`;
-    await axios.patch(patchUrl, { queue, assigneeId: null }, {
-      headers: { Authorization: auth, "Content-Type": "application/json" },
-      timeout: Math.max(BOTHUB_TIMEOUT_MS, 10000),
-    });
-
-    session.lastQueueRouted = queue;
-    session.lastQueueRouteReason = reason;
-    session.lastQueueRouteBotId = resolveBothubBotId();
-    session.lastQueueRouteAt = new Date().toISOString();
-    return true;
-  } catch (e) {
-    console.error("routeConversationToQueue failed:", e?.response?.data || e?.message || e);
-    return false;
   }
 }
 
@@ -2100,7 +2004,6 @@ Envíamelo así: 829XXXXXXX`);
 async function startSimpleServiceFlow({ session, serviceLineKey, from }) {
   if (serviceLineKey === "paquetes_vacacionales") {
     session.state = "await_package_destination";
-    await routeConversationToQueue({ session, phone: from, queueName: HUB_QUEUE_COMMERCIAL, reason: "paquetes_vacacionales" });
     await sendWhatsAppText(from, `Perfecto 🎒 Vamos con *paquete vacacional*.
 
 Te mostraré el listado completo y puedes responder con el *número* o con el *nombre* del paquete que deseas ver.`);
@@ -2591,7 +2494,6 @@ async function sendWhatsAppDocument(to, documentUrl, filename, caption = "", rep
     body: caption || filename || "Documento enviado",
     source: reportSource,
     kind: "DOCUMENT",
-    mediaUrl: documentUrl,
     meta: { filename: filename || undefined, link: documentUrl },
   });
 }
@@ -2620,65 +2522,7 @@ async function sendWhatsAppImage(to, imageUrl, caption = "", reportSource = "BOT
     body: caption || "Imagen enviada",
     source: reportSource,
     kind: "IMAGE",
-    mediaUrl: imageUrl,
     meta: { link: imageUrl },
-  });
-}
-
-async function sendWhatsAppVideo(to, videoUrl, caption = "", reportSource = "BOT") {
-  if (!videoUrl) throw new Error("videoUrl is required");
-
-  const url = `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`;
-  await axios.post(
-    url,
-    {
-      messaging_product: "whatsapp",
-      to,
-      type: "video",
-      video: {
-        link: videoUrl,
-        caption: caption || undefined,
-      },
-    },
-    { headers: { Authorization: `Bearer ${WA_TOKEN}` } }
-  );
-
-  await bothubReportMessage({
-    direction: "OUTBOUND",
-    to: String(to),
-    body: caption || "Video enviado",
-    source: reportSource,
-    kind: "VIDEO",
-    mediaUrl: videoUrl,
-    meta: { link: videoUrl },
-  });
-}
-
-async function sendWhatsAppAudio(to, audioUrl, reportSource = "BOT") {
-  if (!audioUrl) throw new Error("audioUrl is required");
-
-  const url = `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`;
-  await axios.post(
-    url,
-    {
-      messaging_product: "whatsapp",
-      to,
-      type: "audio",
-      audio: {
-        link: audioUrl,
-      },
-    },
-    { headers: { Authorization: `Bearer ${WA_TOKEN}` } }
-  );
-
-  await bothubReportMessage({
-    direction: "OUTBOUND",
-    to: String(to),
-    body: "Audio enviado",
-    source: reportSource,
-    kind: "AUDIO",
-    mediaUrl: audioUrl,
-    meta: { link: audioUrl },
   });
 }
 
@@ -3616,64 +3460,12 @@ app.post("/agent_message", async (req, res) => {
       return res.status(401).json({ error: "Invalid signature" });
     }
 
-    const body = req.body || {};
-    const waTo = String(body.waTo || "").trim();
-    const text = String(body.text || body.body || "").trim();
-    const explicitType = String(body.type || "").trim().toLowerCase();
-    const imageUrl = String(body.imageUrl || body.image_url || body.mediaUrl || body.media_url || "").trim();
-    const videoUrl = String(body.videoUrl || body.video_url || "").trim();
-    const audioUrl = String(body.audioUrl || body.audio_url || body.voiceUrl || body.voice_url || "").trim();
-    const documentUrl = String(body.documentUrl || body.document_url || body.fileUrl || body.file_url || "").trim();
-    const caption = String(body.caption || body.mediaCaption || "").trim();
-    const filename = String(body.filename || body.fileName || "").trim();
+    const { waTo, text } = req.body || {};
+    if (!waTo || !String(waTo).trim()) return res.status(400).json({ error: "waTo is required" });
+    if (!text || !String(text).trim()) return res.status(400).json({ error: "text is required" });
 
-    if (!waTo) return res.status(400).json({ error: "waTo is required" });
-
-    const inferredType = explicitType || (
-      imageUrl ? "image" :
-      videoUrl ? "video" :
-      audioUrl ? "audio" :
-      documentUrl ? "document" :
-      text ? "text" : ""
-    );
-
-    if (!inferredType) {
-      return res.status(400).json({
-        error: "One of text, imageUrl/mediaUrl, videoUrl, audioUrl or documentUrl is required",
-      });
-    }
-
-    if (inferredType === "text") {
-      if (!text) return res.status(400).json({ error: "text is required" });
-      await sendWhatsAppText(waTo, text, "AGENT");
-      return res.json({ ok: true, sentType: "text" });
-    }
-
-    if (inferredType === "image") {
-      if (!imageUrl) return res.status(400).json({ error: "imageUrl/mediaUrl is required" });
-      await sendWhatsAppImage(waTo, imageUrl, caption || text, "AGENT");
-      return res.json({ ok: true, sentType: "image" });
-    }
-
-    if (inferredType === "video") {
-      if (!videoUrl) return res.status(400).json({ error: "videoUrl is required" });
-      await sendWhatsAppVideo(waTo, videoUrl, caption || text, "AGENT");
-      return res.json({ ok: true, sentType: "video" });
-    }
-
-    if (inferredType === "audio") {
-      if (!audioUrl) return res.status(400).json({ error: "audioUrl/voiceUrl is required" });
-      await sendWhatsAppAudio(waTo, audioUrl, "AGENT");
-      return res.json({ ok: true, sentType: "audio" });
-    }
-
-    if (inferredType === "document") {
-      if (!documentUrl) return res.status(400).json({ error: "documentUrl/fileUrl is required" });
-      await sendWhatsAppDocument(waTo, documentUrl, filename || undefined, caption || text, "AGENT");
-      return res.json({ ok: true, sentType: "document" });
-    }
-
-    return res.status(400).json({ error: "Unsupported type" });
+    await sendWhatsAppText(String(waTo), String(text), "AGENT");
+    return res.json({ ok: true });
   } catch (e) {
     console.error("agent_message error:", e?.response?.data || e?.message || e);
     return res.status(500).json({ error: "Internal error" });
@@ -3802,7 +3594,7 @@ app.post("/webhook", async (req, res) => {
     const inboundMeta = preprocessed.inboundMeta || extractInboundMeta(msg);
     const inboundMetaWithMediaUrl = attachHubMediaUrl(req, inboundMeta);
 
-    const inboundReport = await bothubReportMessage({
+    await bothubReportMessage({
       direction: "INBOUND",
       from: String(from),
       body: String(userText),
@@ -3813,8 +3605,6 @@ app.post("/webhook", async (req, res) => {
       meta: inboundMetaWithMediaUrl,
       mediaUrl: inboundMetaWithMediaUrl?.mediaUrl || undefined,
     });
-    const bothubConversationId = extractConversationIdFromBothubResponse(inboundReport);
-    if (bothubConversationId) session.bothubConversationId = bothubConversationId;
 
     if (isHumanModeDisableCommand(tNorm)) {
       session.conversationMode = "bot";
@@ -4281,7 +4071,6 @@ Ej: 5, 8`);
       session.pendingServiceLine = "tours_colombia";
       session.pendingRealTourGroup = "tours_colombia";
       session.state = "await_real_tour_choice";
-      await routeConversationToQueue({ session, phone: from, queueName: HUB_QUEUE_SERVICE_TOURS, reason: "tours_colombia" });
       await sendWhatsAppText(from, categoriesEmojiText());
       await sendRealTourGroupsList(from, session);
       return res.sendStatus(200);
@@ -4294,7 +4083,6 @@ Ej: 5, 8`);
       session.pendingServiceLine = "tours_colombia";
       session.pendingRealTourGroup = directRealTourGroup;
       session.state = "await_real_tour_choice";
-      await routeConversationToQueue({ session, phone: from, queueName: HUB_QUEUE_SERVICE_TOURS, reason: "tours_colombia" });
       await sendWhatsAppText(from, `Perfecto 🌴
 Aquí tienes los *tours disponibles en Colombia*.`);
       await sendRealTourGroupsList(from, session);
@@ -4311,24 +4099,8 @@ Aquí tienes los *tours disponibles en Colombia*.`);
       session.pendingRealTourKey = directRealTourKey;
       session.state = "await_real_tour_date";
       updateLead(session, { tour_key: directRealTourKey, quotePreview: "", converted: false, followupSent: false });
-      await routeConversationToQueue({ session, phone: from, queueName: HUB_QUEUE_SERVICE_TOURS, reason: "tours_colombia" });
       await sendRealTourPresentation(from, tour);
       await sendWhatsAppText(from, `📅 Si deseas reservar *${tour?.title || "este tour"}*, dime la *fecha* que te interesa y seguimos con tu solicitud.`);
-      return res.sendStatus(200);
-    }
-
-    const directPackageKey = detectPackageDestinationKeyFromUser(userText);
-    if (directPackageKey) {
-      const pkg = getPackageDestinationByKey(directPackageKey);
-      clearIntakeFlow(session);
-      disableMenuInactivityReminder(session);
-      session.pendingServiceLine = "paquetes_vacacionales";
-      session.pendingDestination = pkg?.title || userText;
-      session.pendingPackageKey = directPackageKey;
-      session.state = "await_package_date";
-      await routeConversationToQueue({ session, phone: from, queueName: HUB_QUEUE_COMMERCIAL, reason: "paquetes_vacacionales" });
-      await sendPackagePresentation(from, pkg);
-      await sendWhatsAppText(from, `📅 Si deseas agendar *${pkg?.title || "este paquete"}*, dime la *fecha* o *temporada* que te interesa y seguimos con tu solicitud.`);
       return res.sendStatus(200);
     }
 
@@ -4351,14 +4123,9 @@ Aquí tienes los *tours disponibles en Colombia*.`);
       if (serviceLineKey === "tours_colombia") {
         session.pendingRealTourGroup = "tours_colombia";
         session.state = "await_real_tour_choice";
-        await routeConversationToQueue({ session, phone: from, queueName: HUB_QUEUE_SERVICE_TOURS, reason: "tours_colombia" });
         await sendWhatsAppText(from, categoriesEmojiText());
         await sendRealTourGroupsList(from, session);
         return res.sendStatus(200);
-      }
-
-      if (serviceLineKey === "boletos_aereos" || serviceLineKey === "solo_hoteles" || serviceLineKey === "seguros_viaje" || serviceLineKey === "traslados" || serviceLineKey === "hablar_asesor") {
-        await routeConversationToQueue({ session, phone: from, queueName: HUB_QUEUE_SERVICE_TOURS, reason: serviceLineKey });
       }
 
       if (await startSimpleServiceFlow({ session, serviceLineKey, from })) {
