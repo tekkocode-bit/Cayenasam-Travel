@@ -79,6 +79,12 @@ const CATALOG_DOCUMENT_FILENAME = (process.env.CATALOG_DOCUMENT_FILENAME || "cat
 const CATALOG_DOCUMENT_CAPTION =
   (process.env.CATALOG_DOCUMENT_CAPTION || "Aquí tienes el catálogo informativo 📄").trim();
 
+const AUDIO_TRANSCRIPTION_ENABLED = (process.env.AUDIO_TRANSCRIPTION_ENABLED || "1") === "1";
+const IMAGE_ANALYSIS_ENABLED = (process.env.IMAGE_ANALYSIS_ENABLED || "1") === "1";
+const OPENAI_AUDIO_MODEL = (process.env.OPENAI_AUDIO_MODEL || "gpt-4o-mini-transcribe").trim();
+const OPENAI_VISION_MODEL = (process.env.OPENAI_VISION_MODEL || "gpt-4.1-mini").trim();
+const HUMAN_MODE_NOTIFY_USER = (process.env.HUMAN_MODE_NOTIFY_USER || "0") === "1";
+
 // =========================
 // BOTHUB
 // =========================
@@ -113,6 +119,33 @@ function normalizeText(t) {
     .trim();
 }
 
+function truncateText(text, max = 800) {
+  const raw = String(text || "").trim();
+  if (!raw) return "";
+  if (raw.length <= max) return raw;
+  return `${raw.slice(0, Math.max(0, max - 1)).trim()}…`;
+}
+
+function isHumanModeDisableCommand(tNorm) {
+  return [
+    "modo bot",
+    "activar bot",
+    "quitar modo humano",
+    "salir modo humano",
+    "bot activo",
+    "volver al bot",
+    "bot"
+  ].includes(String(tNorm || "").trim());
+}
+
+function isHumanModeEnableCommand(tNorm) {
+  return [
+    "modo humano",
+    "activar humano",
+    "hablar humano",
+    "desactivar bot"
+  ].includes(String(tNorm || "").trim());
+}
 
 
 // =========================
@@ -152,6 +185,8 @@ function defaultMenuReminder() {
 function defaultLead() {
   return {
     tour_key: "",
+    service_key: "",
+    product_label: "",
     followupSent: false,
     lastInteractionAt: "",
     quotePreview: "",
@@ -204,6 +239,10 @@ function defaultSession() {
     lastMsgId: null,
     lastUserMessageAt: "",
     menuReminder: defaultMenuReminder(),
+    conversationMode: "bot",
+    lastInboundMediaKind: "",
+    lastInboundMediaSummary: "",
+    lastInboundTranscript: "",
 
     lead: defaultLead(),
 
@@ -263,6 +302,10 @@ function sanitizeSession(session) {
 if (typeof session.state !== "string") session.state = "idle";
 if (typeof session.greeted !== "boolean") session.greeted = false;
 if (typeof session.lastUserMessageAt !== "string") session.lastUserMessageAt = "";
+if (session.conversationMode !== "human" && session.conversationMode !== "bot") session.conversationMode = "bot";
+if (typeof session.lastInboundMediaKind !== "string") session.lastInboundMediaKind = "";
+if (typeof session.lastInboundMediaSummary !== "string") session.lastInboundMediaSummary = "";
+if (typeof session.lastInboundTranscript !== "string") session.lastInboundTranscript = "";
 
 if (!session.menuReminder || typeof session.menuReminder !== "object") {
   session.menuReminder = defaultMenuReminder();
@@ -706,6 +749,170 @@ async function downloadMetaMedia(mediaId) {
   return {
     buffer: Buffer.from(bin.data),
     mimeType,
+  };
+}
+
+function bufferToDataUrl(buffer, mimeType) {
+  const b64 = Buffer.from(buffer || []).toString("base64");
+  return `data:${mimeType || "application/octet-stream"};base64,${b64}`;
+}
+
+async function transcribeAudioMedia(mediaId, mimeType = "audio/ogg") {
+  if (!OPENAI_API_KEY || !AUDIO_TRANSCRIPTION_ENABLED || !mediaId) return "";
+  try {
+    const downloaded = await downloadMetaMedia(mediaId);
+    const finalMime = downloaded?.mimeType || mimeType || "audio/ogg";
+    const ext = extFromMimeType(finalMime) || ".ogg";
+    const form = new FormData();
+    form.append("model", OPENAI_AUDIO_MODEL);
+    form.append("file", new Blob([downloaded.buffer], { type: finalMime }), `audio${ext}`);
+
+    const resp = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${OPENAI_API_KEY}` },
+      body: form,
+    });
+
+    if (!resp.ok) {
+      const errText = await resp.text().catch(() => "");
+      throw new Error(errText || `OpenAI audio transcription failed (${resp.status})`);
+    }
+
+    const data = await resp.json();
+    return truncateText(data?.text || "", 1200);
+  } catch (e) {
+    console.error("transcribeAudioMedia error:", e?.response?.data || e?.message || e);
+    return "";
+  }
+}
+
+async function analyzeImageMedia(mediaId, mimeType = "image/jpeg", caption = "") {
+  if (!OPENAI_API_KEY || !IMAGE_ANALYSIS_ENABLED || !mediaId) return "";
+  try {
+    const downloaded = await downloadMetaMedia(mediaId);
+    const finalMime = downloaded?.mimeType || mimeType || "image/jpeg";
+    const imageDataUrl = bufferToDataUrl(downloaded.buffer, finalMime);
+
+    const resp = await axios.post(
+      "https://api.openai.com/v1/chat/completions",
+      {
+        model: OPENAI_VISION_MODEL,
+        temperature: 0.1,
+        max_tokens: 220,
+        messages: [
+          {
+            role: "system",
+            content:
+              "Analiza imágenes recibidas por un bot de agencia turística en República Dominicana. Resume solo lo útil para continuar la conversación: si parece un flyer, comprobante, documento de viaje o foto general; extrae el texto visible más relevante; menciona destinos, fechas, precios o nombres detectados; responde en español en 2 o 3 líneas como máximo.",
+          },
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: `Contexto opcional del usuario: ${String(caption || "sin caption")}`,
+              },
+              {
+                type: "image_url",
+                image_url: { url: imageDataUrl },
+              },
+            ],
+          },
+        ],
+      },
+      { headers: { Authorization: `Bearer ${OPENAI_API_KEY}` } }
+    );
+
+    return truncateText(resp.data?.choices?.[0]?.message?.content || "", 900);
+  } catch (e) {
+    console.error("analyzeImageMedia error:", e?.response?.data || e?.message || e);
+    return "";
+  }
+}
+
+async function preprocessInboundMessage(msg) {
+  const baseText = String(extractIncomingText(msg) || "").trim();
+  const inboundMeta = extractInboundMeta(msg);
+
+  if (msg?.type === "audio" && msg?.audio?.id) {
+    const transcript = await transcribeAudioMedia(msg.audio.id, msg?.audio?.mime_type || "audio/ogg");
+    if (transcript) {
+      inboundMeta.transcript = transcript;
+      inboundMeta.aiSummary = truncateText(`Audio transcrito: ${transcript}`, 1000);
+      return {
+        userText: transcript,
+        inboundMeta,
+        mediaKind: "AUDIO",
+        mediaSummary: inboundMeta.aiSummary,
+        transcript,
+      };
+    }
+
+    return {
+      userText: baseText || "[AUDIO]",
+      inboundMeta,
+      mediaKind: "AUDIO",
+      mediaSummary: "Audio recibido sin transcripción disponible.",
+      transcript: "",
+    };
+  }
+
+  if (msg?.type === "image" && msg?.image?.id) {
+    const caption = String(msg?.image?.caption || "").trim();
+    const analysis = await analyzeImageMedia(msg.image.id, msg?.image?.mime_type || "image/jpeg", caption);
+    if (analysis) inboundMeta.aiSummary = analysis;
+    return {
+      userText: caption || analysis || baseText || "[IMAGE]",
+      inboundMeta,
+      mediaKind: "IMAGE",
+      mediaSummary: analysis || (caption ? `Imagen con caption: ${caption}` : "Imagen recibida."),
+      transcript: "",
+    };
+  }
+
+  if (msg?.type === "video" && msg?.video?.id) {
+    const caption = String(msg?.video?.caption || "").trim();
+    if (caption) inboundMeta.aiSummary = `Video con caption: ${caption}`;
+    return {
+      userText: caption || baseText || "[VIDEO]",
+      inboundMeta,
+      mediaKind: "VIDEO",
+      mediaSummary: inboundMeta.aiSummary || "Video recibido.",
+      transcript: "",
+    };
+  }
+
+  if (msg?.type === "document" && msg?.document?.id) {
+    const filename = String(msg?.document?.filename || "").trim();
+    const summary = filename ? `Documento recibido: ${filename}` : "Documento recibido.";
+    inboundMeta.aiSummary = summary;
+    return {
+      userText: filename || baseText || "[DOCUMENT]",
+      inboundMeta,
+      mediaKind: "DOCUMENT",
+      mediaSummary: summary,
+      transcript: "",
+    };
+  }
+
+  if (msg?.type === "location" && msg?.location) {
+    const summary = baseText || "Ubicación recibida.";
+    inboundMeta.aiSummary = summary;
+    return {
+      userText: baseText,
+      inboundMeta,
+      mediaKind: "LOCATION",
+      mediaSummary: summary,
+      transcript: "",
+    };
+  }
+
+  return {
+    userText: baseText,
+    inboundMeta,
+    mediaKind: inboundMeta?.kind || (msg?.type ? String(msg.type).toUpperCase() : "TEXT"),
+    mediaSummary: inboundMeta?.aiSummary || "",
+    transcript: "",
   };
 }
 
@@ -1872,6 +2079,12 @@ Envíamelo así: 829XXXXXXX`);
         await sendPackageDestinationsList(from);
         return true;
       }
+      updateLead(session, {
+        service_key: session.pendingServiceLine || "paquetes_vacacionales",
+        product_label: String(value || "Paquete vacacional"),
+        converted: false,
+        followupSent: false,
+      });
     }
 
     if (step.field) session[step.field] = value;
@@ -1890,6 +2103,14 @@ async function startSimpleServiceFlow({ session, serviceLineKey, from }) {
   const flow = SIMPLE_SERVICE_FLOWS.find((item) => item.serviceLineKey === serviceLineKey);
   if (!flow) return false;
   session.state = flow.startState;
+  updateLead(session, {
+    tour_key: "",
+    service_key: serviceLineKey,
+    product_label: serviceLineLabel(serviceLineKey),
+    quotePreview: "",
+    converted: false,
+    followupSent: false,
+  });
   await sendWhatsAppText(from, flow.startPrompt);
   if (typeof flow.afterStart === "function") await flow.afterStart({ session, from });
   return true;
@@ -2342,6 +2563,51 @@ function buildRealTourInfoText(tour) {
   return lines.join("\n");
 }
 
+function buildRealTourFaqReply(tour, textNorm) {
+  if (!tour) return "";
+  const details = getRealTourTextDetails(tour) || {};
+  const parts = [`🌴 *${tour?.title || "Tour"}*`];
+
+  if (wantsQuote(textNorm)) {
+    parts.push(`💵 ${details.priceText || "Precio: revisa el valor publicado en la imagen del tour o solicita confirmación con la agencia."}`);
+  }
+  if (wantsIncludes(textNorm)) {
+    parts.push(`✅ ${details.includesText || inferRealTourExperienceText(tour?.title || "")}`);
+  }
+  if (wantsSchedule(textNorm)) {
+    parts.push(`📅 ${details.dateText || "Fecha / salida: consulta la disponibilidad o la fecha mostrada en la imagen del tour."}`);
+    if (details.pickupText) parts.push(`🚐 ${details.pickupText}`);
+  }
+  if (wantsPayments(textNorm)) {
+    parts.push(`💳 ${details.paymentText || "Pago sujeto a validación final por parte de la agencia al momento de confirmar."}`);
+  }
+  if (wantsPolicies(textNorm)) {
+    parts.push(`📌 ${details.reserveText || "La solicitud queda registrada para que un asesor te contacte y cierre la confirmación."}`);
+    if (details.noteText) parts.push(`📝 ${details.noteText}`);
+  }
+
+  if (parts.length === 1) parts.push(buildRealTourInfoText(tour));
+  parts.push(`\nSi deseas, dime la fecha y continuamos con tu solicitud.`);
+  return parts.join(`\n`);
+}
+
+function buildCurrentContextFaqReply(session, textNorm) {
+  if (!session) return "";
+  if (!(wantsQuote(textNorm) || wantsIncludes(textNorm) || wantsSchedule(textNorm) || wantsPayments(textNorm) || wantsPolicies(textNorm))) {
+    return "";
+  }
+
+  if (session.pendingRealTourKey) {
+    return buildRealTourFaqReply(getRealTourByKey(session.pendingRealTourKey), textNorm);
+  }
+
+  if (session.pendingTour) {
+    return buildTourFaqReply(getTourByKey(session.pendingTour), textNorm);
+  }
+
+  return "";
+}
+
 function buildRealTourLeadSummary(session, phoneDigits) {
   const tour = getRealTourByKey(session.pendingRealTourKey);
   const group = getRealTourGroupByKey(session.pendingRealTourGroup || tour?.groupKey);
@@ -2419,6 +2685,7 @@ async function sendWhatsAppDocument(to, documentUrl, filename, caption = "", rep
     source: reportSource,
     kind: "DOCUMENT",
     meta: { filename: filename || undefined, link: documentUrl },
+    mediaUrl: documentUrl,
   });
 }
 
@@ -2447,6 +2714,62 @@ async function sendWhatsAppImage(to, imageUrl, caption = "", reportSource = "BOT
     source: reportSource,
     kind: "IMAGE",
     meta: { link: imageUrl },
+    mediaUrl: imageUrl,
+  });
+}
+
+async function sendWhatsAppVideo(to, videoUrl, caption = "", reportSource = "BOT") {
+  if (!videoUrl) throw new Error("videoUrl is required");
+
+  const url = `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`;
+  await axios.post(
+    url,
+    {
+      messaging_product: "whatsapp",
+      to,
+      type: "video",
+      video: {
+        link: videoUrl,
+        caption: caption || undefined,
+      },
+    },
+    { headers: { Authorization: `Bearer ${WA_TOKEN}` } }
+  );
+
+  await bothubReportMessage({
+    direction: "OUTBOUND",
+    to: String(to),
+    body: caption || "Video enviado",
+    source: reportSource,
+    kind: "VIDEO",
+    meta: { link: videoUrl },
+    mediaUrl: videoUrl,
+  });
+}
+
+async function sendWhatsAppAudio(to, audioUrl, reportSource = "BOT") {
+  if (!audioUrl) throw new Error("audioUrl is required");
+
+  const url = `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`;
+  await axios.post(
+    url,
+    {
+      messaging_product: "whatsapp",
+      to,
+      type: "audio",
+      audio: { link: audioUrl },
+    },
+    { headers: { Authorization: `Bearer ${WA_TOKEN}` } }
+  );
+
+  await bothubReportMessage({
+    direction: "OUTBOUND",
+    to: String(to),
+    body: "Audio enviado",
+    source: reportSource,
+    kind: "AUDIO",
+    meta: { link: audioUrl },
+    mediaUrl: audioUrl,
   });
 }
 
@@ -3337,14 +3660,107 @@ app.post("/agent_message", async (req, res) => {
       return res.status(401).json({ error: "Invalid signature" });
     }
 
-    const { waTo, text } = req.body || {};
-    if (!waTo || !String(waTo).trim()) return res.status(400).json({ error: "waTo is required" });
-    if (!text || !String(text).trim()) return res.status(400).json({ error: "text is required" });
+    const {
+      waTo,
+      text,
+      body,
+      type,
+      imageUrl,
+      mediaUrl,
+      videoUrl,
+      audioUrl,
+      voiceUrl,
+      documentUrl,
+      fileUrl,
+      caption,
+      filename,
+    } = req.body || {};
 
-    await sendWhatsAppText(String(waTo), String(text), "AGENT");
-    return res.json({ ok: true });
+    const target = String(waTo || "").trim();
+    if (!target) return res.status(400).json({ error: "waTo is required" });
+
+    const normalizedType = String(type || (imageUrl || mediaUrl ? "image" : videoUrl ? "video" : (audioUrl || voiceUrl) ? "audio" : (documentUrl || fileUrl) ? "document" : "text"))
+      .trim()
+      .toLowerCase();
+
+    if (normalizedType === "text") {
+      const finalText = String(text || body || "").trim();
+      if (!finalText) return res.status(400).json({ error: "text is required" });
+      await sendWhatsAppText(target, finalText, "AGENT");
+      return res.json({ ok: true, type: "text" });
+    }
+
+    if (normalizedType === "image") {
+      const url = String(imageUrl || mediaUrl || "").trim();
+      if (!url) return res.status(400).json({ error: "imageUrl or mediaUrl is required" });
+      await sendWhatsAppImage(target, url, String(caption || ""), "AGENT");
+      return res.json({ ok: true, type: "image" });
+    }
+
+    if (normalizedType === "video") {
+      const url = String(videoUrl || mediaUrl || "").trim();
+      if (!url) return res.status(400).json({ error: "videoUrl or mediaUrl is required" });
+      await sendWhatsAppVideo(target, url, String(caption || ""), "AGENT");
+      return res.json({ ok: true, type: "video" });
+    }
+
+    if (normalizedType === "audio") {
+      const url = String(audioUrl || voiceUrl || mediaUrl || "").trim();
+      if (!url) return res.status(400).json({ error: "audioUrl, voiceUrl or mediaUrl is required" });
+      await sendWhatsAppAudio(target, url, "AGENT");
+      return res.json({ ok: true, type: "audio" });
+    }
+
+    if (normalizedType === "document") {
+      const url = String(documentUrl || fileUrl || mediaUrl || "").trim();
+      if (!url) return res.status(400).json({ error: "documentUrl, fileUrl or mediaUrl is required" });
+      await sendWhatsAppDocument(target, url, String(filename || "archivo"), String(caption || ""), "AGENT");
+      return res.json({ ok: true, type: "document" });
+    }
+
+    return res.status(400).json({ error: "Unsupported type" });
   } catch (e) {
     console.error("agent_message error:", e?.response?.data || e?.message || e);
+    return res.status(500).json({ error: "Internal error" });
+  }
+});
+
+app.post("/conversation_mode", async (req, res) => {
+  try {
+    if (!BOTHUB_WEBHOOK_SECRET) {
+      return res.status(400).json({ error: "BOTHUB_WEBHOOK_SECRET not configured" });
+    }
+
+    const signature = getHubSignature(req);
+    const okSig = verifyHubSignature(req.body, signature, BOTHUB_WEBHOOK_SECRET);
+
+    if (!signature || !okSig) {
+      return res.status(401).json({ error: "Invalid signature" });
+    }
+
+    const { waTo, mode, note, notifyUser } = req.body || {};
+    const normalizedMode = String(mode || "").trim().toLowerCase();
+    if (!waTo || !String(waTo).trim()) return res.status(400).json({ error: "waTo is required" });
+    if (!["bot", "human"].includes(normalizedMode)) {
+      return res.status(400).json({ error: "mode must be 'bot' or 'human'" });
+    }
+
+    const target = String(waTo).trim();
+    const session = await getSession(target);
+    session.conversationMode = normalizedMode;
+    await saveSession(target, session);
+
+    if ((typeof notifyUser === "boolean" ? notifyUser : HUMAN_MODE_NOTIFY_USER) === true) {
+      if (normalizedMode === "human") {
+        await sendWhatsAppText(target, note || "👤 Tu conversación quedó en modo humano. Un asesor continuará por este chat.", "BOT");
+      } else {
+        await sendWhatsAppText(target, note || "🤖 El asistente virtual quedó reactivado. Puedes escribirme *menú* para ver las opciones.", "BOT");
+      }
+    }
+
+    return res.json({ ok: true, waTo: target, mode: normalizedMode });
+  } catch (e) {
+    console.error("conversation_mode error:", e?.response?.data || e?.message || e);
     return res.status(500).json({ error: "Internal error" });
   }
 });
@@ -3418,13 +3834,16 @@ app.post("/webhook", async (req, res) => {
 
     markUserActivity(session);
 
-    const userTextRaw = extractIncomingText(msg);
-    const userText = (userTextRaw || "").trim();
+    const preprocessed = await preprocessInboundMessage(msg);
+    const userText = String(preprocessed?.userText || "").trim();
     const tNorm = normalizeText(userText);
     if (!userText) return res.sendStatus(200);
 
-    const inboundMeta = extractInboundMeta(msg);
-    const inboundMetaWithMediaUrl = attachHubMediaUrl(req, inboundMeta);
+    session.lastInboundMediaKind = String(preprocessed?.mediaKind || "");
+    session.lastInboundMediaSummary = String(preprocessed?.mediaSummary || "");
+    session.lastInboundTranscript = String(preprocessed?.transcript || "");
+
+    const inboundMetaWithMediaUrl = attachHubMediaUrl(req, preprocessed?.inboundMeta || {});
 
     await bothubReportMessage({
       direction: "INBOUND",
@@ -3438,6 +3857,26 @@ app.post("/webhook", async (req, res) => {
       mediaUrl: inboundMetaWithMediaUrl?.mediaUrl || undefined,
     });
 
+    if (isHumanModeDisableCommand(tNorm)) {
+      session.conversationMode = "bot";
+      await saveSession(from, session);
+      await sendWhatsAppText(from, "🤖 El asistente virtual quedó reactivado. Puedes escribirme *menú* para ver las opciones.", "BOT");
+      return res.sendStatus(200);
+    }
+
+    if (isHumanModeEnableCommand(tNorm)) {
+      session.conversationMode = "human";
+      await saveSession(from, session);
+      if (HUMAN_MODE_NOTIFY_USER) {
+        await sendWhatsAppText(from, "👤 Tu conversación quedó en modo humano. Un asesor continuará por este chat.", "BOT");
+      }
+      return res.sendStatus(200);
+    }
+
+    if (session.conversationMode === "human") {
+      await saveSession(from, session);
+      return res.sendStatus(200);
+    }
 
     const detectedServiceLineEarly = detectServiceLineFromUser(userText);
     const detectedOriginEarly = detectOriginKeyFromUser(userText);
@@ -3483,6 +3922,12 @@ app.post("/webhook", async (req, res) => {
     }
 
     if (!session.greeted && session.state === "idle") session.greeted = true;
+
+    const currentFaqReply = buildCurrentContextFaqReply(session, tNorm);
+    if (currentFaqReply) {
+      await sendWhatsAppText(from, currentFaqReply);
+      return res.sendStatus(200);
+    }
 
     const legacyTourStates = [
       "post_booking",
@@ -3951,19 +4396,34 @@ async function followupLeadsLoop() {
     for (const id of ids) {
       const s = await getSession(id);
       const lead = s?.lead || {};
-      if (!lead.tour_key || lead.followupSent || lead.converted) continue;
+      if (lead.followupSent || lead.converted) continue;
       if (!lead.lastInteractionAt) continue;
       if (s?.state === "post_booking" || s?.lastBooking) continue;
+      if (s?.conversationMode === "human") continue;
 
       const ageMs = now - new Date(lead.lastInteractionAt).getTime();
       if (!Number.isFinite(ageMs) || ageMs < minAgeMs || ageMs > maxAgeMs) continue;
 
-      const tour = getAnyTourByKey(lead.tour_key);
-      if (!tour) continue;
+      let msg = "";
 
-      const msg =
-        `Hola 👋 Quedó pendiente tu solicitud para *${tour.title}*.\n\n` +
-        `Si deseas, te ayudo a completarla. Solo responde con la fecha que te interesa 😊`;
+      if (lead.tour_key) {
+        const tour = getAnyTourByKey(lead.tour_key);
+        if (!tour) continue;
+        msg =
+          `Hola 👋 Quedó pendiente tu solicitud para *${tour.title}*.
+
+` +
+          `Si deseas, te ayudo a completarla. Solo responde con la fecha que te interesa 😊`;
+      } else if (lead.service_key && s?.state && s.state !== "idle") {
+        const productLabel = String(lead.product_label || serviceLineLabel(lead.service_key) || "tu solicitud").trim();
+        msg =
+          `Hola 👋 Quedó pendiente tu solicitud de *${productLabel}*.
+
+` +
+          `Si deseas, te ayudo a completarla. Puedes responder por aquí y continuamos 😊`;
+      } else {
+        continue;
+      }
 
       try {
         await sendWhatsAppText(id, msg, "BOT");
