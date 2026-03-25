@@ -1,6 +1,10 @@
 import express from "express";
 import axios from "axios";
 import crypto from "crypto";
+import fs from "fs/promises";
+import os from "os";
+import path from "path";
+import { spawn } from "child_process";
 import { google } from "googleapis";
 import Redis from "ioredis";
 // =========================
@@ -92,6 +96,9 @@ const HUB_MEDIA_SECRET =
 const HUB_MEDIA_TTL_SEC = parseInt(process.env.HUB_MEDIA_TTL_SEC || "900", 10);
 const META_GRAPH_VERSION =
   process.env.WHATSAPP_GRAPH_VERSION || process.env.META_GRAPH_VERSION || "v23.0";
+const MEDIA_DOWNLOAD_TIMEOUT_MS = Number(process.env.MEDIA_DOWNLOAD_TIMEOUT_MS || 90000);
+const MEDIA_UPLOAD_TIMEOUT_MS = Number(process.env.MEDIA_UPLOAD_TIMEOUT_MS || 120000);
+const FFMPEG_BIN = (process.env.FFMPEG_BIN || "ffmpeg").trim();
 
 // =========================
 // HELPERS CONFIG
@@ -588,11 +595,17 @@ function extFromMimeType(mime) {
   if (m.includes("audio/mpeg") || m.includes("audio/mp3")) return ".mp3";
   if (m.includes("audio/wav")) return ".wav";
   if (m.includes("audio/webm")) return ".webm";
+  if (m.includes("audio/aac")) return ".aac";
+  if (m.includes("audio/mp4")) return ".m4a";
+  if (m.includes("audio/amr")) return ".amr";
   if (m.includes("image/jpeg")) return ".jpg";
   if (m.includes("image/png")) return ".png";
   if (m.includes("image/gif")) return ".gif";
   if (m.includes("image/webp")) return ".webp";
   if (m.includes("video/mp4")) return ".mp4";
+  if (m.includes("video/webm")) return ".webm";
+  if (m.includes("video/quicktime")) return ".mov";
+  if (m.includes("video/3gpp")) return ".3gp";
   if (m.includes("application/pdf")) return ".pdf";
   if (m.includes("word")) return ".docx";
   if (m.includes("sheet")) return ".xlsx";
@@ -640,15 +653,23 @@ function verifyHubMediaToken(mediaId, ts, sig) {
   return timingSafeEqualHex(sig, expected);
 }
 
-function buildHubMediaUrl(req, mediaId) {
+function buildHubMediaUrlFromBase(base, mediaId) {
   if (!mediaId || !HUB_MEDIA_SECRET) return "";
-  const base = getBotPublicBaseUrl(req);
-  if (!base) return "";
+  const normalizedBase = String(base || "").trim();
+  if (!normalizedBase) return "";
 
   const ts = String(Date.now());
   const sig = signHubMediaToken(mediaId, ts);
 
-  return `${base.replace(/\/$/, "")}/hub_media/${encodeURIComponent(mediaId)}?ts=${encodeURIComponent(ts)}&sig=${encodeURIComponent(sig)}`;
+  return `${normalizedBase.replace(/\/$/, "")}/hub_media/${encodeURIComponent(mediaId)}?ts=${encodeURIComponent(ts)}&sig=${encodeURIComponent(sig)}`;
+}
+
+function buildHubMediaUrl(req, mediaId) {
+  return buildHubMediaUrlFromBase(getBotPublicBaseUrl(req), mediaId);
+}
+
+function buildBotHubMediaUrl(mediaId) {
+  return buildHubMediaUrlFromBase(BOT_PUBLIC_BASE_URL, mediaId);
 }
 
 function attachHubMediaUrl(req, meta) {
@@ -661,6 +682,106 @@ function attachHubMediaUrl(req, meta) {
   }
 
   return out;
+}
+
+function filenameFromDisposition(disposition, fallback = "file") {
+  const raw = String(disposition || "");
+  const starMatch = raw.match(/filename\*=UTF-8''([^;]+)/i);
+  if (starMatch?.[1]) {
+    try {
+      return sanitizeFileName(decodeURIComponent(starMatch[1]), fallback);
+    } catch {
+      return sanitizeFileName(starMatch[1], fallback);
+    }
+  }
+
+  const match = raw.match(/filename="?([^";]+)"?/i);
+  if (match?.[1]) return sanitizeFileName(match[1], fallback);
+  return sanitizeFileName(fallback, fallback);
+}
+
+function filenameFromUrl(url, fallback = "file") {
+  try {
+    const parsed = new URL(String(url || ""));
+    const last = parsed.pathname.split("/").filter(Boolean).pop() || "";
+    if (!last) return sanitizeFileName(fallback, fallback);
+    return sanitizeFileName(decodeURIComponent(last), fallback);
+  } catch {
+    const clean = String(url || "").split("?")[0].split("#")[0].split("/").filter(Boolean).pop() || fallback;
+    return sanitizeFileName(clean, fallback);
+  }
+}
+
+function mimeTypeFromFilename(name) {
+  const lower = String(name || "").toLowerCase().split("?")[0].trim();
+  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+  if (lower.endsWith(".png")) return "image/png";
+  if (lower.endsWith(".gif")) return "image/gif";
+  if (lower.endsWith(".webp")) return "image/webp";
+  if (lower.endsWith(".pdf")) return "application/pdf";
+  if (lower.endsWith(".doc")) return "application/msword";
+  if (lower.endsWith(".docx")) return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+  if (lower.endsWith(".xls")) return "application/vnd.ms-excel";
+  if (lower.endsWith(".xlsx")) return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  if (lower.endsWith(".ppt")) return "application/vnd.ms-powerpoint";
+  if (lower.endsWith(".pptx")) return "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+  if (lower.endsWith(".mp3")) return "audio/mpeg";
+  if (lower.endsWith(".ogg") || lower.endsWith(".opus")) return "audio/ogg";
+  if (lower.endsWith(".wav")) return "audio/wav";
+  if (lower.endsWith(".aac")) return "audio/aac";
+  if (lower.endsWith(".m4a")) return "audio/mp4";
+  if (lower.endsWith(".amr")) return "audio/amr";
+  if (lower.endsWith(".webm")) return "video/webm";
+  if (lower.endsWith(".mp4")) return "video/mp4";
+  if (lower.endsWith(".mov")) return "video/quicktime";
+  if (lower.endsWith(".3gp")) return "video/3gpp";
+  return "";
+}
+
+function ensureFilenameExtension(name, mimeType) {
+  const clean = sanitizeFileName(name || "file", "file");
+  if (/\.[a-z0-9]{2,5}$/i.test(clean)) return clean;
+  const ext = extFromMimeType(mimeType);
+  return ext ? `${clean}${ext}` : clean;
+}
+
+function normalizeOutboundKind(kind, mimeType = "") {
+  const raw = String(kind || "").trim().toLowerCase();
+  if (["image", "photo", "picture", "img"].includes(raw)) return "IMAGE";
+  if (["video", "movie", "clip"].includes(raw)) return "VIDEO";
+  if (["audio", "voice", "voice_note", "voicenote", "ptt", "note", "nota_de_voz", "nota-voz"].includes(raw)) return "AUDIO";
+  if (["document", "doc", "file", "archivo", "attachment", "adjunto", "pdf"].includes(raw)) return "DOCUMENT";
+  if (["location", "ubicacion", "ubication", "geo", "map", "maps"].includes(raw)) return "LOCATION";
+  if (["text", "texto", "message", "mensaje"].includes(raw)) return "TEXT";
+
+  const lowerMime = String(mimeType || "").toLowerCase();
+  if (lowerMime.startsWith("image/")) return "IMAGE";
+  if (lowerMime.startsWith("video/")) return "VIDEO";
+  if (lowerMime.startsWith("audio/")) return "AUDIO";
+  if (lowerMime) return "DOCUMENT";
+  return raw ? raw.toUpperCase() : "";
+}
+
+function firstDefined(...values) {
+  for (const value of values) {
+    if (value === undefined || value === null) continue;
+    if (typeof value === "string" && !value.trim()) continue;
+    return value;
+  }
+  return undefined;
+}
+
+function toNumberOrUndefined(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+function parseBoolLike(value) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  const raw = String(value || "").trim().toLowerCase();
+  if (!raw) return false;
+  return ["1", "true", "yes", "si", "sí", "y"].includes(raw);
 }
 
 async function getMetaMediaInfo(mediaId) {
@@ -706,7 +827,594 @@ async function downloadMetaMedia(mediaId) {
   return {
     buffer: Buffer.from(bin.data),
     mimeType,
+    filename: info?.filename || `media-${mediaId}${extFromMimeType(mimeType)}`,
+    info,
   };
+}
+
+async function downloadRemoteAsset(url, preferredFilename = "", preferredMimeType = "") {
+  const res = await axios.get(String(url), {
+    responseType: "arraybuffer",
+    timeout: MEDIA_DOWNLOAD_TIMEOUT_MS,
+    maxRedirects: 5,
+    validateStatus: () => true,
+    headers: {
+      "User-Agent": "TekkoMediaFetcher/1.0",
+    },
+  });
+
+  if (res.status < 200 || res.status >= 300) {
+    throw new Error(typeof res.data === "string" ? res.data : `Media download failed (${res.status})`);
+  }
+
+  const disposition = res.headers?.["content-disposition"] || "";
+  const headerMime = String(res.headers?.["content-type"] || "").split(";")[0].trim();
+  const rawFilename =
+    preferredFilename ||
+    filenameFromDisposition(disposition, "") ||
+    filenameFromUrl(url, "file");
+  const mimeType = preferredMimeType || headerMime || mimeTypeFromFilename(rawFilename) || "application/octet-stream";
+  const filename = ensureFilenameExtension(rawFilename, mimeType);
+
+  return {
+    buffer: Buffer.from(res.data),
+    mimeType,
+    filename,
+    url: String(url),
+  };
+}
+
+async function runFfmpeg(args) {
+  return await new Promise((resolve, reject) => {
+    const child = spawn(FFMPEG_BIN, args, { stdio: ["ignore", "pipe", "pipe"] });
+    let stderr = "";
+    child.stderr.on("data", (chunk) => {
+      stderr += String(chunk || "");
+    });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code === 0) return resolve(stderr);
+      reject(new Error(stderr || `ffmpeg exited with code ${code}`));
+    });
+  });
+}
+
+async function convertMediaBuffer({ buffer, inputExt = "", outputExt, ffmpegArgs = [] }) {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "tekko-wa-media-"));
+  try {
+    const inputPath = path.join(tempDir, `input${inputExt || ""}`);
+    const outputPath = path.join(tempDir, `output${outputExt}`);
+    await fs.writeFile(inputPath, buffer);
+    await runFfmpeg(["-y", "-i", inputPath, ...ffmpegArgs, outputPath]);
+    return await fs.readFile(outputPath);
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+async function prepareRemoteMediaForWhatsApp({ kind, url, mimeType = "", filename = "", voice = false }) {
+  const downloaded = await downloadRemoteAsset(url, filename, mimeType);
+  const normalizedKind = normalizeOutboundKind(kind, mimeType || downloaded.mimeType);
+
+  let finalBuffer = downloaded.buffer;
+  let finalMimeType = mimeType || downloaded.mimeType || mimeTypeFromFilename(downloaded.filename) || "application/octet-stream";
+  let finalFilename = filename || downloaded.filename || `media${extFromMimeType(finalMimeType)}`;
+
+  const lowerMime = String(finalMimeType || "").toLowerCase();
+  const lowerFile = String(finalFilename || "").toLowerCase();
+
+  try {
+    if (normalizedKind === "AUDIO") {
+      const supportedAudio = ["audio/ogg", "audio/mpeg", "audio/mp3", "audio/aac", "audio/mp4", "audio/amr", "audio/wav"];
+      const needsAudioConversion =
+        lowerMime.includes("webm") ||
+        lowerFile.endsWith(".webm") ||
+        lowerFile.endsWith(".oga") ||
+        !supportedAudio.includes(lowerMime);
+
+      if (voice || needsAudioConversion) {
+        const outputExt = voice ? ".ogg" : ".mp3";
+        finalBuffer = await convertMediaBuffer({
+          buffer: finalBuffer,
+          inputExt: extFromMimeType(finalMimeType) || path.extname(finalFilename) || ".bin",
+          outputExt,
+          ffmpegArgs: voice
+            ? ["-vn", "-ac", "1", "-c:a", "libopus", "-b:a", "64k"]
+            : ["-vn", "-c:a", "libmp3lame", "-b:a", "128k"],
+        });
+        finalMimeType = voice ? "audio/ogg" : "audio/mpeg";
+        finalFilename = ensureFilenameExtension(path.parse(finalFilename).name || "audio", finalMimeType);
+      }
+    } else if (normalizedKind === "VIDEO") {
+      const needsVideoConversion = lowerMime.includes("webm") || lowerFile.endsWith(".webm") || !["video/mp4", "video/3gpp"].includes(lowerMime);
+      if (needsVideoConversion) {
+        finalBuffer = await convertMediaBuffer({
+          buffer: finalBuffer,
+          inputExt: extFromMimeType(finalMimeType) || path.extname(finalFilename) || ".bin",
+          outputExt: ".mp4",
+          ffmpegArgs: [
+            "-c:v", "libx264",
+            "-preset", "veryfast",
+            "-pix_fmt", "yuv420p",
+            "-movflags", "+faststart",
+            "-c:a", "aac",
+            "-b:a", "128k",
+          ],
+        });
+        finalMimeType = "video/mp4";
+        finalFilename = ensureFilenameExtension(path.parse(finalFilename).name || "video", finalMimeType);
+      }
+    } else if (normalizedKind === "IMAGE") {
+      if (lowerMime.includes("webp") || lowerFile.endsWith(".webp")) {
+        finalBuffer = await convertMediaBuffer({
+          buffer: finalBuffer,
+          inputExt: extFromMimeType(finalMimeType) || path.extname(finalFilename) || ".webp",
+          outputExt: ".jpg",
+          ffmpegArgs: ["-frames:v", "1"],
+        });
+        finalMimeType = "image/jpeg";
+        finalFilename = ensureFilenameExtension(path.parse(finalFilename).name || "image", finalMimeType);
+      }
+    }
+  } catch (conversionError) {
+    console.error("Media conversion fallback:", conversionError?.message || conversionError);
+  }
+
+  return {
+    kind: normalizedKind,
+    originalUrl: String(url || ""),
+    originalMimeType: downloaded.mimeType,
+    originalFilename: downloaded.filename,
+    buffer: finalBuffer,
+    mimeType: finalMimeType,
+    filename: ensureFilenameExtension(finalFilename, finalMimeType),
+    voice: !!voice,
+  };
+}
+
+async function uploadMediaBufferToMeta({ buffer, mimeType, filename }) {
+  if (!WA_TOKEN) throw new Error("WA_TOKEN not configured");
+  if (!PHONE_NUMBER_ID) throw new Error("PHONE_NUMBER_ID not configured");
+
+  const form = new FormData();
+  form.append("messaging_product", "whatsapp");
+  form.append("type", mimeType || "application/octet-stream");
+  form.append(
+    "file",
+    new Blob([buffer], { type: mimeType || "application/octet-stream" }),
+    ensureFilenameExtension(filename || "file", mimeType || "application/octet-stream")
+  );
+
+  const response = await fetch(`https://graph.facebook.com/${META_GRAPH_VERSION}/${PHONE_NUMBER_ID}/media`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${WA_TOKEN}`,
+    },
+    body: form,
+    signal: AbortSignal.timeout(MEDIA_UPLOAD_TIMEOUT_MS),
+  });
+
+  const raw = await response.text();
+  const data = safeJson(raw, null) || {};
+  if (!response.ok || !data?.id) {
+    throw new Error(data?.error?.message || data?.error?.error_user_msg || `Meta media upload failed (${response.status})`);
+  }
+
+  return data;
+}
+
+async function postWhatsAppMessage(payload) {
+  const url = `https://graph.facebook.com/${META_GRAPH_VERSION}/${PHONE_NUMBER_ID}/messages`;
+  const res = await axios.post(url, payload, {
+    headers: { Authorization: `Bearer ${WA_TOKEN}` },
+    timeout: 60000,
+    validateStatus: () => true,
+  });
+
+  if (res.status < 200 || res.status >= 300) {
+    const detail = res?.data?.error?.message || res?.data?.error?.error_user_msg || `WhatsApp send failed (${res.status})`;
+    const err = new Error(detail);
+    err.responseData = res.data;
+    throw err;
+  }
+
+  return res.data || {};
+}
+
+function buildMediaFallbackText(kind, mediaUrl, caption = "", filename = "") {
+  const lead = caption || filename || (kind === "IMAGE" ? "Te comparto una imagen" : kind === "VIDEO" ? "Te comparto un video" : kind === "AUDIO" ? "Te comparto un audio" : "Te comparto un archivo");
+  if (!mediaUrl) return lead;
+  return `${lead}
+${mediaUrl}`;
+}
+
+function buildMediaMessagePayload({ to, kind, mediaId = "", mediaUrl = "", caption = "", filename = "", latitude, longitude, name, address }) {
+  const payload = {
+    messaging_product: "whatsapp",
+    to: String(to),
+    type: String(kind || "").toLowerCase(),
+  };
+
+  if (kind === "IMAGE") {
+    payload.image = mediaId
+      ? { id: mediaId, caption: caption || undefined }
+      : { link: mediaUrl, caption: caption || undefined };
+    return payload;
+  }
+
+  if (kind === "VIDEO") {
+    payload.video = mediaId
+      ? { id: mediaId, caption: caption || undefined }
+      : { link: mediaUrl, caption: caption || undefined };
+    return payload;
+  }
+
+  if (kind === "DOCUMENT") {
+    payload.document = mediaId
+      ? { id: mediaId, filename: filename || undefined, caption: caption || undefined }
+      : { link: mediaUrl, filename: filename || undefined, caption: caption || undefined };
+    return payload;
+  }
+
+  if (kind === "AUDIO") {
+    payload.audio = mediaId ? { id: mediaId } : { link: mediaUrl };
+    return payload;
+  }
+
+  if (kind === "LOCATION") {
+    payload.location = {
+      latitude: Number(latitude),
+      longitude: Number(longitude),
+      name: name || undefined,
+      address: address || undefined,
+    };
+    return payload;
+  }
+
+  throw new Error(`Unsupported media kind: ${kind}`);
+}
+
+async function reportOutboundMedia({ to, kind, reportSource = "BOT", body = "", mediaId = "", mediaUrl = "", originalUrl = "", mimeType = "", filename = "", caption = "", voice = false, waMessageId = "", sendMethod = "", latitude, longitude, name, address }) {
+  const resolvedHubMediaUrl = mediaId ? buildBotHubMediaUrl(mediaId) : "";
+  const resolvedMediaUrl = resolvedHubMediaUrl || mediaUrl || originalUrl || "";
+
+  await bothubReportMessage({
+    direction: "OUTBOUND",
+    to: String(to),
+    body: String(body || caption || filename || `${kind} enviado`),
+    source: reportSource,
+    waMessageId: waMessageId || undefined,
+    kind,
+    mediaUrl: resolvedMediaUrl || undefined,
+    meta: {
+      kind,
+      mediaId: mediaId || undefined,
+      mediaUrl: resolvedMediaUrl || undefined,
+      hubMediaUrl: resolvedHubMediaUrl || undefined,
+      directUrl: originalUrl || mediaUrl || undefined,
+      originalUrl: originalUrl || mediaUrl || undefined,
+      mimeType: mimeType || undefined,
+      filename: filename || undefined,
+      caption: caption || undefined,
+      voice: voice || undefined,
+      sendMethod: sendMethod || undefined,
+      latitude: latitude !== undefined ? Number(latitude) : undefined,
+      longitude: longitude !== undefined ? Number(longitude) : undefined,
+      name: name || undefined,
+      address: address || undefined,
+    },
+  });
+}
+
+async function sendWhatsAppMediaMessage({ to, kind, mediaId = "", mediaUrl = "", mimeType = "", filename = "", caption = "", voice = false, latitude, longitude, name = "", address = "", reportSource = "BOT", textFallback = "" }) {
+  const normalizedKind = normalizeOutboundKind(kind, mimeType);
+  if (!normalizedKind) throw new Error("Invalid media kind");
+
+  if (normalizedKind === "LOCATION") {
+    const response = await postWhatsAppMessage(
+      buildMediaMessagePayload({ to, kind: normalizedKind, latitude, longitude, name, address })
+    );
+    await reportOutboundMedia({
+      to,
+      kind: normalizedKind,
+      reportSource,
+      body: name || address || "Ubicación enviada",
+      waMessageId: response?.messages?.[0]?.id,
+      sendMethod: "location",
+      latitude,
+      longitude,
+      name,
+      address,
+    });
+    return { ok: true, sendMethod: "location", messageId: response?.messages?.[0]?.id };
+  }
+
+  const resolvedOriginalUrl = String(mediaUrl || "").trim();
+  let resolvedMimeType = String(mimeType || "").trim();
+  let resolvedFilename = String(filename || "").trim();
+  let resolvedMediaId = String(mediaId || "").trim();
+  let uploadedMediaId = resolvedMediaId;
+  let sendMethod = resolvedMediaId ? "media_id" : "";
+  let response = null;
+  let lastError = null;
+
+  if (!resolvedMediaId && resolvedOriginalUrl) {
+    try {
+      const prepared = await prepareRemoteMediaForWhatsApp({
+        kind: normalizedKind,
+        url: resolvedOriginalUrl,
+        mimeType: resolvedMimeType,
+        filename: resolvedFilename,
+        voice,
+      });
+      resolvedMimeType = prepared.mimeType || resolvedMimeType;
+      resolvedFilename = prepared.filename || resolvedFilename;
+      const uploaded = await uploadMediaBufferToMeta(prepared);
+      uploadedMediaId = String(uploaded?.id || "").trim();
+      resolvedMediaId = uploadedMediaId;
+      sendMethod = "media_id";
+    } catch (uploadError) {
+      lastError = uploadError;
+      console.error(`Media upload fallback (${normalizedKind}):`, uploadError?.message || uploadError);
+    }
+  }
+
+  try {
+    if (resolvedMediaId) {
+      response = await postWhatsAppMessage(
+        buildMediaMessagePayload({
+          to,
+          kind: normalizedKind,
+          mediaId: resolvedMediaId,
+          mediaUrl: resolvedOriginalUrl,
+          caption,
+          filename: resolvedFilename,
+        })
+      );
+      sendMethod = sendMethod || "media_id";
+    } else if (resolvedOriginalUrl) {
+      response = await postWhatsAppMessage(
+        buildMediaMessagePayload({
+          to,
+          kind: normalizedKind,
+          mediaUrl: resolvedOriginalUrl,
+          caption,
+          filename: resolvedFilename,
+        })
+      );
+      sendMethod = "link";
+    } else {
+      throw new Error(`No mediaId or mediaUrl available for ${normalizedKind}`);
+    }
+  } catch (sendError) {
+    lastError = sendError;
+    if (resolvedMediaId && resolvedOriginalUrl) {
+      try {
+        response = await postWhatsAppMessage(
+          buildMediaMessagePayload({
+            to,
+            kind: normalizedKind,
+            mediaUrl: resolvedOriginalUrl,
+            caption,
+            filename: resolvedFilename,
+          })
+        );
+        sendMethod = "link_fallback";
+      } catch (fallbackError) {
+        lastError = fallbackError;
+      }
+    }
+
+    if (!response && textFallback && resolvedOriginalUrl) {
+      await sendWhatsAppText(String(to), textFallback, reportSource);
+      return {
+        ok: false,
+        fallback: "text",
+        mediaId: uploadedMediaId || undefined,
+        mediaUrl: buildBotHubMediaUrl(uploadedMediaId) || resolvedOriginalUrl || undefined,
+        error: lastError?.message || String(lastError || "Media send failed"),
+      };
+    }
+
+    if (!response) throw lastError;
+  }
+
+  await reportOutboundMedia({
+    to,
+    kind: normalizedKind,
+    reportSource,
+    body: caption || resolvedFilename || `${normalizedKind} enviado`,
+    mediaId: uploadedMediaId || resolvedMediaId || undefined,
+    mediaUrl: buildBotHubMediaUrl(uploadedMediaId || resolvedMediaId) || resolvedOriginalUrl || undefined,
+    originalUrl: resolvedOriginalUrl || undefined,
+    mimeType: resolvedMimeType || undefined,
+    filename: resolvedFilename || undefined,
+    caption: caption || undefined,
+    voice,
+    waMessageId: response?.messages?.[0]?.id,
+    sendMethod,
+  });
+
+  return {
+    ok: true,
+    sendMethod,
+    mediaId: uploadedMediaId || resolvedMediaId || undefined,
+    mediaUrl: buildBotHubMediaUrl(uploadedMediaId || resolvedMediaId) || resolvedOriginalUrl || undefined,
+    messageId: response?.messages?.[0]?.id,
+  };
+}
+
+function normalizeAgentAttachment(candidate, fallbackCaption = "") {
+  if (!candidate || typeof candidate !== "object") return null;
+
+  const mimeType = String(
+    firstDefined(
+      candidate?.mimeType,
+      candidate?.mimetype,
+      candidate?.mime,
+      candidate?.contentType,
+      candidate?.content_type,
+      candidate?.meta?.mimeType,
+      candidate?.meta?.mimetype
+    ) || ""
+  ).trim();
+
+  const kind = normalizeOutboundKind(
+    firstDefined(
+      candidate?.kind,
+      candidate?.type,
+      candidate?.messageType,
+      candidate?.message_type,
+      candidate?.mediaType,
+      candidate?.media_type,
+      candidate?.attachmentType,
+      candidate?.attachment_type,
+      candidate?.meta?.kind,
+      candidate?.meta?.type
+    ),
+    mimeType
+  );
+
+  const latitude = toNumberOrUndefined(
+    firstDefined(candidate?.latitude, candidate?.lat, candidate?.location?.latitude, candidate?.location?.lat)
+  );
+  const longitude = toNumberOrUndefined(
+    firstDefined(candidate?.longitude, candidate?.lng, candidate?.lon, candidate?.location?.longitude, candidate?.location?.lng, candidate?.location?.lon)
+  );
+
+  if (kind === "LOCATION" || (latitude !== undefined && longitude !== undefined)) {
+    if (latitude === undefined || longitude === undefined) return null;
+    return {
+      kind: "LOCATION",
+      latitude,
+      longitude,
+      name: String(firstDefined(candidate?.name, candidate?.location?.name) || "").trim(),
+      address: String(firstDefined(candidate?.address, candidate?.location?.address) || "").trim(),
+    };
+  }
+
+  const mediaUrl = String(
+    firstDefined(
+      candidate?.mediaUrl,
+      candidate?.media_url,
+      candidate?.url,
+      candidate?.link,
+      candidate?.href,
+      candidate?.src,
+      candidate?.downloadUrl,
+      candidate?.download_url,
+      candidate?.attachmentUrl,
+      candidate?.attachment_url,
+      candidate?.fileUrl,
+      candidate?.file_url,
+      candidate?.assetUrl,
+      candidate?.asset_url,
+      candidate?.meta?.mediaUrl,
+      candidate?.meta?.url,
+      candidate?.meta?.link
+    ) || ""
+  ).trim();
+
+  const mediaId = String(
+    firstDefined(candidate?.mediaId, candidate?.media_id, candidate?.metaMediaId, candidate?.meta_media_id, candidate?.meta?.mediaId) || ""
+  ).trim();
+
+  const filename = String(
+    firstDefined(candidate?.filename, candidate?.fileName, candidate?.file_name, candidate?.name, candidate?.title, candidate?.meta?.filename) || ""
+  ).trim();
+
+  const caption = String(
+    firstDefined(candidate?.caption, candidate?.body, candidate?.text, candidate?.message, candidate?.meta?.caption, fallbackCaption) || ""
+  ).trim();
+
+  const voice = parseBoolLike(
+    firstDefined(candidate?.voice, candidate?.ptt, candidate?.isVoiceNote, candidate?.is_voice_note, candidate?.audio?.voice, candidate?.meta?.voice)
+  );
+
+  if (!["IMAGE", "VIDEO", "AUDIO", "DOCUMENT"].includes(kind)) return null;
+  if (!mediaUrl && !mediaId) return null;
+
+  return {
+    kind,
+    mediaUrl,
+    mediaId,
+    mimeType,
+    filename,
+    caption,
+    voice,
+  };
+}
+
+function parseAgentMessagePayload(body) {
+  const raw = body && typeof body === "object" ? body : {};
+  const waToRaw = String(
+    firstDefined(
+      raw?.waTo,
+      raw?.wa_to,
+      raw?.to,
+      raw?.phone,
+      raw?.waId,
+      raw?.wa_id,
+      raw?.chatId,
+      raw?.chat_id,
+      raw?.contact?.wa_id,
+      raw?.contact?.phone
+    ) || ""
+  ).trim();
+  const waTo = toE164DigitsRD(waToRaw || "");
+
+  const primaryText = String(firstDefined(raw?.text, raw?.body, raw?.message, raw?.content) || "").trim();
+  const attachmentsRaw = [];
+
+  const topLevelHasMedia =
+    firstDefined(
+      raw?.type,
+      raw?.kind,
+      raw?.messageType,
+      raw?.message_type,
+      raw?.mediaType,
+      raw?.media_type,
+      raw?.mediaUrl,
+      raw?.media_url,
+      raw?.url,
+      raw?.link,
+      raw?.mediaId,
+      raw?.media_id,
+      raw?.latitude,
+      raw?.longitude,
+      raw?.lat,
+      raw?.lng,
+      raw?.location
+    ) !== undefined;
+
+  if (topLevelHasMedia) attachmentsRaw.push(raw);
+
+  for (const key of ["attachment", "media", "file", "asset", "location"]) {
+    const value = raw?.[key];
+    if (!value) continue;
+    if (Array.isArray(value)) attachmentsRaw.push(...value);
+    else if (typeof value === "object") attachmentsRaw.push(value);
+  }
+
+  if (Array.isArray(raw?.attachments)) attachmentsRaw.push(...raw.attachments);
+
+  const mediaItems = [];
+  const seen = new Set();
+  for (const candidate of attachmentsRaw) {
+    const item = normalizeAgentAttachment(candidate, attachmentsRaw.length === 1 ? primaryText : "");
+    if (!item) continue;
+    const signature = stableStringify(item);
+    if (seen.has(signature)) continue;
+    seen.add(signature);
+    mediaItems.push(item);
+  }
+
+  let text = primaryText;
+  if (mediaItems.length === 1 && mediaItems[0]?.caption && mediaItems[0].caption === primaryText && !parseBoolLike(raw?.sendTextSeparately || raw?.send_text_separately)) {
+    text = "";
+  }
+
+  return { waTo, text, mediaItems };
 }
 
 const app = express();
@@ -2421,12 +3129,12 @@ function buildRealTourLeadSummary(session, phoneDigits) {
 // WhatsApp send helpers
 // =========================
 async function sendWhatsAppText(to, text, reportSource = "BOT") {
-  const url = `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`;
-  await axios.post(
-    url,
-    { messaging_product: "whatsapp", to, type: "text", text: { body: text } },
-    { headers: { Authorization: `Bearer ${WA_TOKEN}` } }
-  );
+  await postWhatsAppMessage({
+    messaging_product: "whatsapp",
+    to,
+    type: "text",
+    text: { body: text },
+  });
 
   await bothubReportMessage({
     direction: "OUTBOUND",
@@ -2437,60 +3145,79 @@ async function sendWhatsAppText(to, text, reportSource = "BOT") {
   });
 }
 
-async function sendWhatsAppDocument(to, documentUrl, filename, caption = "", reportSource = "BOT") {
-  if (!documentUrl) throw new Error("documentUrl is required");
-
-  const url = `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`;
-  await axios.post(
-    url,
-    {
-      messaging_product: "whatsapp",
-      to,
-      type: "document",
-      document: {
-        link: documentUrl,
-        filename: filename || undefined,
-        caption: caption || undefined,
-      },
-    },
-    { headers: { Authorization: `Bearer ${WA_TOKEN}` } }
-  );
-
-  await bothubReportMessage({
-    direction: "OUTBOUND",
-    to: String(to),
-    body: caption || filename || "Documento enviado",
-    source: reportSource,
+async function sendWhatsAppDocument(to, documentUrl, filename, caption = "", reportSource = "BOT", extra = {}) {
+  if (!documentUrl && !extra?.mediaId) throw new Error("documentUrl or mediaId is required");
+  return await sendWhatsAppMediaMessage({
+    to,
     kind: "DOCUMENT",
-    meta: { filename: filename || undefined, link: documentUrl },
+    mediaUrl: documentUrl,
+    mediaId: extra?.mediaId || "",
+    mimeType: extra?.mimeType || "",
+    filename,
+    caption,
+    reportSource,
+    textFallback: buildMediaFallbackText("DOCUMENT", documentUrl, caption, filename),
   });
 }
 
-async function sendWhatsAppImage(to, imageUrl, caption = "", reportSource = "BOT") {
-  if (!imageUrl) throw new Error("imageUrl is required");
-
-  const url = `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`;
-  await axios.post(
-    url,
-    {
-      messaging_product: "whatsapp",
-      to,
-      type: "image",
-      image: {
-        link: imageUrl,
-        caption: caption || undefined,
-      },
-    },
-    { headers: { Authorization: `Bearer ${WA_TOKEN}` } }
-  );
-
-  await bothubReportMessage({
-    direction: "OUTBOUND",
-    to: String(to),
-    body: caption || "Imagen enviada",
-    source: reportSource,
+async function sendWhatsAppImage(to, imageUrl, caption = "", reportSource = "BOT", extra = {}) {
+  if (!imageUrl && !extra?.mediaId) throw new Error("imageUrl or mediaId is required");
+  return await sendWhatsAppMediaMessage({
+    to,
     kind: "IMAGE",
-    meta: { link: imageUrl },
+    mediaUrl: imageUrl,
+    mediaId: extra?.mediaId || "",
+    mimeType: extra?.mimeType || "",
+    filename: extra?.filename || "",
+    caption,
+    reportSource,
+    textFallback: buildMediaFallbackText("IMAGE", imageUrl, caption),
+  });
+}
+
+async function sendWhatsAppAudio(to, audioUrl, { mediaId = "", mimeType = "", filename = "", voice = false, reportSource = "BOT" } = {}) {
+  if (!audioUrl && !mediaId) throw new Error("audioUrl or mediaId is required");
+  return await sendWhatsAppMediaMessage({
+    to,
+    kind: "AUDIO",
+    mediaUrl: audioUrl,
+    mediaId,
+    mimeType,
+    filename,
+    voice,
+    reportSource,
+    textFallback: buildMediaFallbackText("AUDIO", audioUrl, "", filename),
+  });
+}
+
+async function sendWhatsAppVideo(to, videoUrl, caption = "", { mediaId = "", mimeType = "", filename = "", reportSource = "BOT" } = {}) {
+  if (!videoUrl && !mediaId) throw new Error("videoUrl or mediaId is required");
+  return await sendWhatsAppMediaMessage({
+    to,
+    kind: "VIDEO",
+    mediaUrl: videoUrl,
+    mediaId,
+    mimeType,
+    filename,
+    caption,
+    reportSource,
+    textFallback: buildMediaFallbackText("VIDEO", videoUrl, caption, filename),
+  });
+}
+
+async function sendWhatsAppLocation(to, { latitude, longitude, name = "", address = "", reportSource = "BOT" } = {}) {
+  if (!Number.isFinite(Number(latitude)) || !Number.isFinite(Number(longitude))) {
+    throw new Error("latitude and longitude are required");
+  }
+
+  return await sendWhatsAppMediaMessage({
+    to,
+    kind: "LOCATION",
+    latitude,
+    longitude,
+    name,
+    address,
+    reportSource,
   });
 }
 
@@ -3383,15 +4110,73 @@ app.post("/agent_message", async (req, res) => {
       return res.status(401).json({ error: "Invalid signature" });
     }
 
-    const { waTo, text } = req.body || {};
+    const { waTo, text, mediaItems } = parseAgentMessagePayload(req.body || {});
     if (!waTo || !String(waTo).trim()) return res.status(400).json({ error: "waTo is required" });
-    if (!text || !String(text).trim()) return res.status(400).json({ error: "text is required" });
+    if ((!text || !String(text).trim()) && (!Array.isArray(mediaItems) || mediaItems.length === 0)) {
+      return res.status(400).json({ error: "text or media is required" });
+    }
 
-    await sendWhatsAppText(String(waTo), String(text), "AGENT");
-    return res.json({ ok: true });
+    const sent = [];
+
+    if (text && String(text).trim()) {
+      await sendWhatsAppText(String(waTo), String(text), "AGENT");
+      sent.push({ kind: "TEXT" });
+    }
+
+    for (const item of mediaItems || []) {
+      if (!item?.kind) continue;
+
+      if (item.kind === "IMAGE") {
+        const result = await sendWhatsAppImage(String(waTo), item.mediaUrl, item.caption || "", "AGENT", { mediaId: item.mediaId || "", mimeType: item.mimeType || "", filename: item.filename || "" });
+        sent.push({ kind: item.kind, ...result });
+        continue;
+      }
+
+      if (item.kind === "DOCUMENT") {
+        const result = await sendWhatsAppDocument(String(waTo), item.mediaUrl, item.filename || "", item.caption || "", "AGENT", { mediaId: item.mediaId || "", mimeType: item.mimeType || "" });
+        sent.push({ kind: item.kind, ...result });
+        continue;
+      }
+
+      if (item.kind === "AUDIO") {
+        const result = await sendWhatsAppAudio(String(waTo), item.mediaUrl, {
+          mediaId: item.mediaId || "",
+          mimeType: item.mimeType || "",
+          filename: item.filename || "",
+          voice: !!item.voice,
+          reportSource: "AGENT",
+        });
+        sent.push({ kind: item.kind, ...result });
+        continue;
+      }
+
+      if (item.kind === "VIDEO") {
+        const result = await sendWhatsAppVideo(String(waTo), item.mediaUrl, item.caption || "", {
+          mediaId: item.mediaId || "",
+          mimeType: item.mimeType || "",
+          filename: item.filename || "",
+          reportSource: "AGENT",
+        });
+        sent.push({ kind: item.kind, ...result });
+        continue;
+      }
+
+      if (item.kind === "LOCATION") {
+        const result = await sendWhatsAppLocation(String(waTo), {
+          latitude: item.latitude,
+          longitude: item.longitude,
+          name: item.name || "",
+          address: item.address || "",
+          reportSource: "AGENT",
+        });
+        sent.push({ kind: item.kind, ...result });
+      }
+    }
+
+    return res.json({ ok: true, sentCount: sent.length, sent });
   } catch (e) {
     console.error("agent_message error:", e?.response?.data || e?.message || e);
-    return res.status(500).json({ error: "Internal error" });
+    return res.status(500).json({ error: "Internal error", detail: e?.response?.data || e?.message || "unknown" });
   }
 });
 
