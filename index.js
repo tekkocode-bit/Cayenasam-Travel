@@ -1867,6 +1867,8 @@ Envíamelo así: 829XXXXXXX`);
         return true;
       }
       value = selectedPackage.title;
+      session.pendingPackageKey = selectedPackage.key;
+      await sendPackagePresentation(from, selectedPackage);
     }
 
     if (step.field) session[step.field] = value;
