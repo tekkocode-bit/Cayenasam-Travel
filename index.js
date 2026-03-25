@@ -90,6 +90,12 @@ const BOTHUB_WEBHOOK_URL = (process.env.BOTHUB_WEBHOOK_URL || "").trim();
 const BOTHUB_WEBHOOK_SECRET = (process.env.BOTHUB_WEBHOOK_SECRET || "").trim();
 const BOTHUB_TIMEOUT_MS = Number(process.env.BOTHUB_TIMEOUT_MS || 6000);
 
+const BOTHUB_API_BASE_URL = (process.env.BOTHUB_API_BASE_URL || process.env.CRM_API_BASE_URL || "").trim();
+const BOTHUB_JWT_TOKEN = (process.env.BOTHUB_JWT_TOKEN || process.env.CRM_JWT_TOKEN || "").trim();
+const BOTHUB_BOT_ID = (process.env.BOTHUB_BOT_ID || "").trim();
+const HUB_QUEUE_SERVICE_TOURS = (process.env.HUB_QUEUE_SERVICE_TOURS || "Servicio al cliente / Tours").trim();
+const HUB_QUEUE_COMMERCIAL = (process.env.HUB_QUEUE_COMMERCIAL || "Asesoría comercial").trim();
+
 const BOT_PUBLIC_BASE_URL = (process.env.BOT_PUBLIC_BASE_URL || "").replace(/\/$/, "");
 const HUB_MEDIA_SECRET =
   (process.env.HUB_MEDIA_SECRET || BOTHUB_WEBHOOK_SECRET || VERIFY_TOKEN || "").trim();
@@ -500,14 +506,14 @@ function verifyHubSignature(reqBody, signatureHex, secret) {
 }
 
 async function bothubReportMessage(payload) {
-  if (!BOTHUB_WEBHOOK_URL || !BOTHUB_WEBHOOK_SECRET) return;
+  if (!BOTHUB_WEBHOOK_URL || !BOTHUB_WEBHOOK_SECRET) return null;
 
   try {
     const cleanPayload = removeUndefinedDeep(payload);
     const raw = stableStringify(cleanPayload);
     const sig = crypto.createHmac("sha256", BOTHUB_WEBHOOK_SECRET).update(raw).digest("hex");
 
-    await axios.post(BOTHUB_WEBHOOK_URL, raw, {
+    const res = await axios.post(BOTHUB_WEBHOOK_URL, raw, {
       headers: {
         "Content-Type": "application/json",
         "X-HUB-SIGNATURE": sig,
@@ -515,8 +521,133 @@ async function bothubReportMessage(payload) {
       timeout: BOTHUB_TIMEOUT_MS,
       transformRequest: [(data) => data],
     });
+    return res?.data || null;
   } catch (e) {
     console.error("Bothub report failed:", e?.response?.data || e?.message || e);
+    return null;
+  }
+}
+
+function deriveBothubApiBaseUrl() {
+  const explicit = String(BOTHUB_API_BASE_URL || "").trim();
+  if (explicit) return explicit.replace(/\/$/, "");
+  const raw = String(BOTHUB_WEBHOOK_URL || "").trim();
+  if (!raw) return "";
+  try {
+    const u = new URL(raw);
+    const p = u.pathname.replace(/\/$/, "");
+    const candidates = [
+      /\/api\/webhooks\/[^/]+$/,
+      /\/api\/webhooks\/webhook\/[^/]+$/,
+      /\/webhooks\/[^/]+$/,
+      /\/webhooks\/webhook\/[^/]+$/,
+    ];
+    let next = p;
+    for (const rgx of candidates) {
+      if (rgx.test(next)) {
+        next = next.replace(rgx, "");
+        break;
+      }
+    }
+    u.pathname = next || "";
+    u.search = "";
+    u.hash = "";
+    return u.toString().replace(/\/$/, "");
+  } catch {
+    return "";
+  }
+}
+
+function deriveBothubBotId() {
+  const explicit = String(BOTHUB_BOT_ID || "").trim();
+  if (explicit) return explicit;
+  const raw = String(BOTHUB_WEBHOOK_URL || "").trim();
+  if (!raw) return "";
+  const m = raw.match(/\/(?:api\/)?webhooks(?:\/webhook)?\/([^/?#]+)\/?(?:\?.*)?$/i);
+  return m?.[1] ? String(m[1]).trim() : "";
+}
+
+function buildBothubAuthHeaders() {
+  const token = String(BOTHUB_JWT_TOKEN || "").trim();
+  if (!token) return {};
+  return { Authorization: `Bearer ${token}` };
+}
+
+function phoneMatchesConversation(convo, phone) {
+  const targetDigits = normalizePhoneDigits(phone);
+  if (!targetDigits) return false;
+  const candidates = [
+    convo?.contact?.phone,
+    convo?.phone,
+    convo?.waFrom,
+    convo?.waTo,
+  ]
+    .map((v) => normalizePhoneDigits(v))
+    .filter(Boolean);
+  return candidates.includes(targetDigits);
+}
+
+async function findBothubConversationIdByPhone(phone) {
+  const baseUrl = deriveBothubApiBaseUrl();
+  const botId = deriveBothubBotId();
+  if (!baseUrl || !botId) return "";
+  try {
+    const res = await axios.get(`${baseUrl}/api/conversations`, {
+      params: { botId },
+      headers: buildBothubAuthHeaders(),
+      timeout: Math.max(BOTHUB_TIMEOUT_MS, 8000),
+    });
+    const items = Array.isArray(res?.data) ? res.data : [];
+    const found = items.find((c) => phoneMatchesConversation(c, phone));
+    return String(found?.id || "").trim();
+  } catch (e) {
+    console.error("findBothubConversationIdByPhone failed:", e?.response?.data || e?.message || e);
+    return "";
+  }
+}
+
+async function routeConversationToQueue({ session, phone, queueName, reason = "service_selection" }) {
+  const nextQueue = String(queueName || "").trim();
+  if (!nextQueue) return { ok: false, reason: "missing_queue" };
+
+  if (!String(BOTHUB_JWT_TOKEN || "").trim()) {
+    return { ok: false, reason: "missing_bothub_jwt" };
+  }
+
+  if (session?.lastQueueRouted === nextQueue) {
+    return { ok: true, skipped: true, queue: nextQueue };
+  }
+
+  const baseUrl = deriveBothubApiBaseUrl();
+  if (!baseUrl) return { ok: false, reason: "missing_api_base" };
+
+  const conversationId = session?.hubConversationId || await findBothubConversationIdByPhone(phone);
+  if (!conversationId) return { ok: false, reason: "conversation_not_found" };
+
+  try {
+    await axios.patch(
+      `${baseUrl}/api/conversations/${encodeURIComponent(conversationId)}`,
+      {
+        queue: nextQueue,
+        assigneeId: null,
+        transferReason: reason,
+      },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          ...buildBothubAuthHeaders(),
+        },
+        timeout: Math.max(BOTHUB_TIMEOUT_MS, 8000),
+      }
+    );
+    if (session) {
+      session.hubConversationId = conversationId;
+      session.lastQueueRouted = nextQueue;
+    }
+    return { ok: true, conversationId, queue: nextQueue };
+  } catch (e) {
+    console.error("routeConversationToQueue failed:", e?.response?.data || e?.message || e);
+    return { ok: false, reason: "patch_failed" };
   }
 }
 
@@ -4257,7 +4388,7 @@ app.post("/webhook", async (req, res) => {
     const inboundMeta = extractInboundMeta(msg);
     const inboundMetaWithMediaUrl = attachHubMediaUrl(req, inboundMeta);
 
-    await bothubReportMessage({
+    const bothubInboundAck = await bothubReportMessage({
       direction: "INBOUND",
       from: String(from),
       body: String(userText),
@@ -4268,6 +4399,7 @@ app.post("/webhook", async (req, res) => {
       meta: inboundMetaWithMediaUrl,
       mediaUrl: inboundMetaWithMediaUrl?.mediaUrl || undefined,
     });
+    if (bothubInboundAck?.conversationId) session.hubConversationId = String(bothubInboundAck.conversationId);
 
 
     const detectedServiceLineEarly = detectServiceLineFromUser(userText);
@@ -4663,6 +4795,7 @@ Envíamelo así: nombre@correo.com`);
     if (tNorm.includes("categorias") || tNorm.includes("categorías") || tNorm.includes("ver tours")) {
       disableMenuInactivityReminder(session);
       session.pendingServiceLine = "tours_rd";
+      await routeConversationToQueue({ session, phone: from, queueName: HUB_QUEUE_SERVICE_TOURS, reason: "tours_rd" });
       session.state = "await_tour_group";
       await sendWhatsAppText(from, categoriesEmojiText());
       await sendRealTourGroupsList(from);
@@ -4674,6 +4807,7 @@ Envíamelo así: nombre@correo.com`);
       clearIntakeFlow(session);
       disableMenuInactivityReminder(session);
       session.pendingServiceLine = "tours_rd";
+      await routeConversationToQueue({ session, phone: from, queueName: HUB_QUEUE_SERVICE_TOURS, reason: "tours_rd" });
       session.pendingRealTourGroup = directRealTourGroup;
       session.state = "await_real_tour_choice";
       await sendWhatsAppText(from, `Perfecto 🌴
@@ -4688,6 +4822,7 @@ Aquí tienes las excursiones disponibles en *${getRealTourGroupByKey(directRealT
       clearIntakeFlow(session);
       disableMenuInactivityReminder(session);
       session.pendingServiceLine = "tours_rd";
+      await routeConversationToQueue({ session, phone: from, queueName: HUB_QUEUE_SERVICE_TOURS, reason: "tours_rd" });
       session.pendingRealTourGroup = tour?.groupKey || null;
       session.pendingRealTourKey = directRealTourKey;
       session.state = "await_real_tour_date";
@@ -4703,6 +4838,7 @@ Aquí tienes las excursiones disponibles en *${getRealTourGroupByKey(directRealT
       clearIntakeFlow(session);
       disableMenuInactivityReminder(session);
       session.pendingServiceLine = "paquetes_vacacionales";
+      await routeConversationToQueue({ session, phone: from, queueName: HUB_QUEUE_COMMERCIAL, reason: "paquetes_vacacionales" });
       session.pendingDestination = pkg?.title || userText;
       session.pendingPackageKey = directPackageKey;
       session.state = "await_package_date";
@@ -4716,6 +4852,12 @@ Aquí tienes las excursiones disponibles en *${getRealTourGroupByKey(directRealT
       clearIntakeFlow(session);
       disableMenuInactivityReminder(session);
       session.pendingServiceLine = serviceLineKey;
+
+      if (["tours_rd", "boletos_aereos", "solo_hoteles", "seguros_viaje", "traslados", "hablar_asesor"].includes(serviceLineKey)) {
+        await routeConversationToQueue({ session, phone: from, queueName: HUB_QUEUE_SERVICE_TOURS, reason: serviceLineKey });
+      } else if (serviceLineKey === "paquetes_vacacionales") {
+        await routeConversationToQueue({ session, phone: from, queueName: HUB_QUEUE_COMMERCIAL, reason: serviceLineKey });
+      }
 
       if (serviceLineKey === "catalogo_pdf") {
         await sendCatalogDocument(from);
