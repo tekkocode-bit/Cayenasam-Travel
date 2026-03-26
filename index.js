@@ -105,6 +105,7 @@ const META_GRAPH_VERSION =
 const MEDIA_DOWNLOAD_TIMEOUT_MS = Number(process.env.MEDIA_DOWNLOAD_TIMEOUT_MS || 90000);
 const MEDIA_UPLOAD_TIMEOUT_MS = Number(process.env.MEDIA_UPLOAD_TIMEOUT_MS || 120000);
 const FFMPEG_BIN = (process.env.FFMPEG_BIN || "ffmpeg").trim();
+const HUMAN_MODE_NOTIFY_USER = (process.env.HUMAN_MODE_NOTIFY_USER || "0") === "1";
 
 // =========================
 // HELPERS CONFIG
@@ -124,6 +125,34 @@ function normalizeText(t) {
     .replace(/\p{Diacritic}/gu, "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function truncateText(text, max = 800) {
+  const raw = String(text || "").trim();
+  if (!raw) return "";
+  if (raw.length <= max) return raw;
+  return `${raw.slice(0, Math.max(0, max - 1)).trim()}…`;
+}
+
+function isHumanModeDisableCommand(tNorm) {
+  return [
+    "modo bot",
+    "activar bot",
+    "quitar modo humano",
+    "salir modo humano",
+    "bot activo",
+    "volver al bot",
+    "bot"
+  ].includes(String(tNorm || "").trim());
+}
+
+function isHumanModeEnableCommand(tNorm) {
+  return [
+    "modo humano",
+    "activar humano",
+    "hablar humano",
+    "desactivar bot"
+  ].includes(String(tNorm || "").trim());
 }
 
 
@@ -217,6 +246,7 @@ function defaultSession() {
     lastMsgId: null,
     lastUserMessageAt: "",
     menuReminder: defaultMenuReminder(),
+    conversationMode: "bot",
 
     lead: defaultLead(),
 
@@ -276,6 +306,7 @@ function sanitizeSession(session) {
 if (typeof session.state !== "string") session.state = "idle";
 if (typeof session.greeted !== "boolean") session.greeted = false;
 if (typeof session.lastUserMessageAt !== "string") session.lastUserMessageAt = "";
+if (session.conversationMode !== "human" && session.conversationMode !== "bot") session.conversationMode = "bot";
 
 if (!session.menuReminder || typeof session.menuReminder !== "object") {
   session.menuReminder = defaultMenuReminder();
@@ -4311,6 +4342,46 @@ app.post("/agent_message", async (req, res) => {
   }
 });
 
+app.post("/conversation_mode", async (req, res) => {
+  try {
+    if (!BOTHUB_WEBHOOK_SECRET) {
+      return res.status(400).json({ error: "BOTHUB_WEBHOOK_SECRET not configured" });
+    }
+
+    const signature = getHubSignature(req);
+    const okSig = verifyHubSignature(req.body, signature, BOTHUB_WEBHOOK_SECRET);
+
+    if (!signature || !okSig) {
+      return res.status(401).json({ error: "Invalid signature" });
+    }
+
+    const { waTo, mode, note, notifyUser } = req.body || {};
+    const normalizedMode = String(mode || "").trim().toLowerCase();
+    if (!waTo || !String(waTo).trim()) return res.status(400).json({ error: "waTo is required" });
+    if (!["bot", "human"].includes(normalizedMode)) {
+      return res.status(400).json({ error: "mode must be 'bot' or 'human'" });
+    }
+
+    const target = String(waTo).trim();
+    const session = await getSession(target);
+    session.conversationMode = normalizedMode;
+    await saveSession(target, session);
+
+    if ((typeof notifyUser === "boolean" ? notifyUser : HUMAN_MODE_NOTIFY_USER) === true) {
+      if (normalizedMode === "human") {
+        await sendWhatsAppText(target, note || "👤 Tu conversación quedó en modo humano. Un asesor continuará por este chat.", "BOT");
+      } else {
+        await sendWhatsAppText(target, note || "🤖 El asistente virtual quedó reactivado. Puedes escribirme *menú* para ver las opciones.", "BOT");
+      }
+    }
+
+    return res.json({ ok: true, waTo: target, mode: normalizedMode });
+  } catch (e) {
+    console.error("conversation_mode error:", e?.response?.data || e?.message || e);
+    return res.status(500).json({ error: "Internal error", detail: e?.response?.data || e?.message || "unknown" });
+  }
+});
+
 app.get("/hub_media/:mediaId", async (req, res) => {
   try {
     const { mediaId } = req.params || {};
@@ -4401,6 +4472,24 @@ app.post("/webhook", async (req, res) => {
     });
     if (bothubInboundAck?.conversationId) session.hubConversationId = String(bothubInboundAck.conversationId);
 
+    if (isHumanModeDisableCommand(tNorm)) {
+      session.conversationMode = "bot";
+      await saveSession(from, session);
+      await sendWhatsAppText(from, "🤖 Listo. Reactivé el asistente virtual. Escribe *menú* para ver las opciones.");
+      return res.sendStatus(200);
+    }
+
+    if (isHumanModeEnableCommand(tNorm)) {
+      session.conversationMode = "human";
+      await saveSession(from, session);
+      await sendWhatsAppText(from, "👤 Perfecto. Dejo la conversación en modo humano para que continúe un asesor.");
+      return res.sendStatus(200);
+    }
+
+    if (session.conversationMode === "human") {
+      await saveSession(from, session);
+      return res.sendStatus(200);
+    }
 
     const detectedServiceLineEarly = detectServiceLineFromUser(userText);
     const detectedOriginEarly = detectOriginKeyFromUser(userText);
