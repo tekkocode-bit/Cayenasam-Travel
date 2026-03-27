@@ -247,6 +247,9 @@ function defaultSession() {
     lastUserMessageAt: "",
     menuReminder: defaultMenuReminder(),
     conversationMode: "bot",
+    awaitingAdvisor: false,
+    awaitingAdvisorSince: "",
+    awaitingAdvisorNoticeAt: "",
 
     lead: defaultLead(),
 
@@ -307,6 +310,9 @@ if (typeof session.state !== "string") session.state = "idle";
 if (typeof session.greeted !== "boolean") session.greeted = false;
 if (typeof session.lastUserMessageAt !== "string") session.lastUserMessageAt = "";
 if (session.conversationMode !== "human" && session.conversationMode !== "bot") session.conversationMode = "bot";
+if (typeof session.awaitingAdvisor !== "boolean") session.awaitingAdvisor = false;
+if (typeof session.awaitingAdvisorSince !== "string") session.awaitingAdvisorSince = "";
+if (typeof session.awaitingAdvisorNoticeAt !== "string") session.awaitingAdvisorNoticeAt = "";
 
 if (!session.menuReminder || typeof session.menuReminder !== "object") {
   session.menuReminder = defaultMenuReminder();
@@ -2284,6 +2290,39 @@ function clearLeadOnBooking(session) {
   };
 }
 
+function clearAwaitingAdvisor(session) {
+  session.awaitingAdvisor = false;
+  session.awaitingAdvisorSince = "";
+  session.awaitingAdvisorNoticeAt = "";
+}
+
+function markAwaitingAdvisor(session) {
+  session.awaitingAdvisor = true;
+  session.awaitingAdvisorSince = new Date().toISOString();
+  session.awaitingAdvisorNoticeAt = "";
+}
+
+function buildAwaitingAdvisorText() {
+  return (
+    `✅ Tu solicitud ya fue registrada.
+
+` +
+    `Un asesor de ${BUSINESS_NAME} te estará respondiendo por esta misma vía lo antes posible.
+` +
+    `Por favor, espera su atención para evitar duplicar la solicitud.`
+  );
+}
+
+function shouldSendAwaitingAdvisorNotice(session, cooldownMs = 120000) {
+  const last = session?.awaitingAdvisorNoticeAt ? new Date(session.awaitingAdvisorNoticeAt).getTime() : 0;
+  if (!last) return true;
+  return (Date.now() - last) >= cooldownMs;
+}
+
+function markAwaitingAdvisorNoticeSent(session) {
+  session.awaitingAdvisorNoticeAt = new Date().toISOString();
+}
+
 function isValidEmail(text) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(text || "").trim());
 }
@@ -2693,11 +2732,19 @@ function getDigitsOnly(text) {
 }
 
 async function finalizeSimpleLead({ session, flow, from, phoneDigits }) {
-  const summaryText = buildLeadSummary(flow.summaryTitle, flow.buildSummaryFields(session, phoneDigits));
+  const resolvedPhoneDigits = getDigitsOnly(phoneDigits || from);
+  const summaryText = buildLeadSummary(flow.summaryTitle, flow.buildSummaryFields(session, resolvedPhoneDigits));
   updateLead(session, { tour_key: "", quotePreview: summaryText, converted: false, followupSent: false });
   await handoffToHumanTool({ summary: summaryText });
-  await notifyPersonalWhatsAppLeadSummary(summaryText, phoneDigits);
-  await sendWhatsAppText(from, flow.buildConfirmationText(session));
+  await notifyPersonalWhatsAppLeadSummary(summaryText, resolvedPhoneDigits);
+  await sendWhatsAppText(
+    from,
+    `${flow.buildConfirmationText(session)}
+
+👤 Un asesor de la agencia te estará atendiendo por esta misma vía lo antes posible.
+Por favor, espera su atención para evitar duplicar la solicitud.`
+  );
+  markAwaitingAdvisor(session);
   clearIntakeFlow(session);
 }
 
@@ -2721,13 +2768,7 @@ async function handleSimpleServiceFlow({ session, from, userText, tNorm }) {
         return true;
       }
     } else if (step.kind === "phone") {
-      value = getDigitsOnly(userText);
-      if (value.length < 8) {
-        await sendWhatsAppText(from, step.invalidPrompt || `Ese número parece incompleto 🙏
-Envíamelo así: 829XXXXXXX`);
-        return true;
-      }
-      await finalizeSimpleLead({ session, flow, from, phoneDigits: value });
+      await finalizeSimpleLead({ session, flow, from, phoneDigits: getDigitsOnly(from) });
       return true;
     } else if (step.kind === "packageDestination") {
       selectedPackage = parsePackageChoice(session, userText);
@@ -2743,6 +2784,11 @@ Envíamelo así: 829XXXXXXX`);
 
     if (step.field) session[step.field] = value;
     if (typeof step.assign === "function") step.assign(session, value, userText);
+
+    if (step.completeAfterValid) {
+      await finalizeSimpleLead({ session, flow, from, phoneDigits: getDigitsOnly(from) });
+      return true;
+    }
 
     if (step.nextState) session.state = step.nextState;
     if (step.prompt) await sendWhatsAppText(from, step.prompt);
@@ -2800,7 +2846,7 @@ Ej: "15 de abril", "en junio" o "ida y vuelta del 10 al 18 de mayo".` },
       { state: "await_flight_date", kind: "text", minLen: 2, field: "pendingTravelDateText", nextState: "await_flight_people", invalidPrompt: `Por favor, indícame la *fecha aproximada* del vuelo.`, prompt: `Perfecto. ¿Para cuántas *personas* sería el boleto aéreo?` },
       { state: "await_flight_people", kind: "count", minValue: 1, field: "pendingPassengers", nextState: "await_flight_name", invalidPrompt: `Indícame cuántas *personas* viajarían. Ej: 1, 2, 3...`, prompt: `Perfecto 👍
 Ahora dime tu *nombre completo*.` },
-      { state: "await_flight_name", kind: "text", minLen: 3, field: "pendingName", nextState: "await_flight_phone", invalidPrompt: `Por favor, envíame tu *nombre completo* 🙂`, prompt: `Gracias. Ahora envíame tu *número de teléfono* para que el equipo te contacte.` },
+      { state: "await_flight_name", kind: "text", minLen: 3, field: "pendingName", completeAfterValid: true, invalidPrompt: `Por favor, envíame tu *nombre completo* 🙂` },
       { state: "await_flight_phone", kind: "phone" },
     ],
   },
@@ -2844,7 +2890,7 @@ Ahora dime la *fecha aproximada* del check-in o temporada.` },
 Ej: *3 estrellas*, *4 estrellas* o *5 estrellas*.` },
       { state: "await_hotel_stars", kind: "text", minLen: 2, field: "pendingHotelStars", nextState: "await_hotel_name", invalidPrompt: `Indícame si prefieres *3 estrellas*, *4 estrellas* o *5 estrellas*.`, prompt: `Gracias 👍
 Ahora dime tu *nombre completo*.` },
-      { state: "await_hotel_name", kind: "text", minLen: 3, field: "pendingName", nextState: "await_hotel_phone", invalidPrompt: `Por favor, envíame tu *nombre completo* 🙂`, prompt: `Gracias. Ahora envíame tu *número de teléfono* para que el equipo te contacte.` },
+      { state: "await_hotel_name", kind: "text", minLen: 3, field: "pendingName", completeAfterValid: true, invalidPrompt: `Por favor, envíame tu *nombre completo* 🙂` },
       { state: "await_hotel_phone", kind: "phone" },
     ],
   },
@@ -2884,7 +2930,7 @@ Recibí tu solicitud de *seguro de viaje* y nuestro equipo te contactará con op
 Ej: 34 y 29 / 40, 12 y 8` },
       { state: "await_insurance_ages", kind: "text", minLen: 1, field: "pendingTravelerAgesText", nextState: "await_insurance_name", invalidPrompt: `Por favor, indícame las *edades* de los viajeros.`, prompt: `Perfecto 👍
 Ahora dime tu *nombre completo*.` },
-      { state: "await_insurance_name", kind: "text", minLen: 3, field: "pendingName", nextState: "await_insurance_phone", invalidPrompt: `Por favor, envíame tu *nombre completo* 🙂`, prompt: `Gracias. Ahora envíame tu *número de teléfono* para que el equipo te contacte.` },
+      { state: "await_insurance_name", kind: "text", minLen: 3, field: "pendingName", completeAfterValid: true, invalidPrompt: `Por favor, envíame tu *nombre completo* 🙂` },
       { state: "await_insurance_phone", kind: "phone" },
     ],
   },
@@ -2921,7 +2967,7 @@ Ahora dime la *fecha aproximada* del traslado.` },
       { state: "await_transfer_date", kind: "text", minLen: 2, field: "pendingTravelDateText", nextState: "await_transfer_people", invalidPrompt: `Por favor, indícame la *fecha aproximada* del traslado.`, prompt: `Gracias. ¿Para cuántas *personas* sería el traslado?` },
       { state: "await_transfer_people", kind: "count", minValue: 1, field: "pendingPassengers", nextState: "await_transfer_name", invalidPrompt: `Indícame cuántas *personas* viajarían. Ej: 2`, prompt: `Perfecto 👍
 Ahora dime tu *nombre completo*.` },
-      { state: "await_transfer_name", kind: "text", minLen: 3, field: "pendingName", nextState: "await_transfer_phone", invalidPrompt: `Por favor, envíame tu *nombre completo* 🙂`, prompt: `Gracias. Ahora envíame tu *número de teléfono* para que el equipo te contacte.` },
+      { state: "await_transfer_name", kind: "text", minLen: 3, field: "pendingName", completeAfterValid: true, invalidPrompt: `Por favor, envíame tu *nombre completo* 🙂` },
       { state: "await_transfer_phone", kind: "phone" },
     ],
   },
@@ -2961,7 +3007,7 @@ Ej: "julio", "semana santa", "15 de agosto".` },
       { state: "await_package_date", kind: "text", minLen: 2, field: "pendingTravelDateText", nextState: "await_package_people", invalidPrompt: `Por favor, indícame la *fecha* o *temporada* que te interesa.`, prompt: `Gracias. ¿Para cuántas *personas* sería el paquete?` },
       { state: "await_package_people", kind: "count", minValue: 1, field: "pendingPassengers", nextState: "await_package_name", invalidPrompt: `Indícame cuántas *personas* viajarían. Ej: 2`, prompt: `Perfecto 👍
 Ahora dime tu *nombre completo*.` },
-      { state: "await_package_name", kind: "text", minLen: 3, field: "pendingName", nextState: "await_package_phone", invalidPrompt: `Por favor, envíame tu *nombre completo* 🙂`, prompt: `Gracias. Ahora envíame tu *número de teléfono* para que el equipo te contacte.` },
+      { state: "await_package_name", kind: "text", minLen: 3, field: "pendingName", completeAfterValid: true, invalidPrompt: `Por favor, envíame tu *nombre completo* 🙂` },
       { state: "await_package_phone", kind: "phone" },
     ],
   },
@@ -2988,7 +3034,7 @@ Tema: ${session.pendingAdvisorTopic || "Consulta general"}`,
     steps: [
       { state: "await_advisor_topic", kind: "text", minLen: 2, field: "pendingAdvisorTopic", nextState: "await_advisor_name", invalidPrompt: `Cuéntame brevemente qué necesitas para poder pasarte con el asesor correcto.`, prompt: `Perfecto 👍
 Ahora dime tu *nombre completo*.` },
-      { state: "await_advisor_name", kind: "text", minLen: 3, field: "pendingName", nextState: "await_advisor_phone", invalidPrompt: `Por favor, envíame tu *nombre completo* 🙂`, prompt: `Gracias. Ahora envíame tu *número de teléfono* para que un asesor te contacte.` },
+      { state: "await_advisor_name", kind: "text", minLen: 3, field: "pendingName", completeAfterValid: true, invalidPrompt: `Por favor, envíame tu *nombre completo* 🙂` },
       { state: "await_advisor_phone", kind: "phone" },
     ],
   },
@@ -4278,10 +4324,15 @@ app.post("/agent_message", async (req, res) => {
       return res.status(400).json({ error: "text or media is required" });
     }
 
+    const target = String(waTo).trim();
+    const targetSession = await getSession(target);
+    clearAwaitingAdvisor(targetSession);
+    await saveSession(target, targetSession);
+
     const sent = [];
 
     if (text && String(text).trim()) {
-      await sendWhatsAppText(String(waTo), String(text), "AGENT");
+      await sendWhatsAppText(target, String(text), "AGENT");
       sent.push({ kind: "TEXT" });
     }
 
@@ -4289,19 +4340,19 @@ app.post("/agent_message", async (req, res) => {
       if (!item?.kind) continue;
 
       if (item.kind === "IMAGE") {
-        const result = await sendWhatsAppImage(String(waTo), item.mediaUrl, item.caption || "", "AGENT", { mediaId: item.mediaId || "", mimeType: item.mimeType || "", filename: item.filename || "" });
+        const result = await sendWhatsAppImage(target, item.mediaUrl, item.caption || "", "AGENT", { mediaId: item.mediaId || "", mimeType: item.mimeType || "", filename: item.filename || "" });
         sent.push({ kind: item.kind, ...result });
         continue;
       }
 
       if (item.kind === "DOCUMENT") {
-        const result = await sendWhatsAppDocument(String(waTo), item.mediaUrl, item.filename || "", item.caption || "", "AGENT", { mediaId: item.mediaId || "", mimeType: item.mimeType || "" });
+        const result = await sendWhatsAppDocument(target, item.mediaUrl, item.filename || "", item.caption || "", "AGENT", { mediaId: item.mediaId || "", mimeType: item.mimeType || "" });
         sent.push({ kind: item.kind, ...result });
         continue;
       }
 
       if (item.kind === "AUDIO") {
-        const result = await sendWhatsAppAudio(String(waTo), item.mediaUrl, {
+        const result = await sendWhatsAppAudio(target, item.mediaUrl, {
           mediaId: item.mediaId || "",
           mimeType: item.mimeType || "",
           filename: item.filename || "",
@@ -4313,7 +4364,7 @@ app.post("/agent_message", async (req, res) => {
       }
 
       if (item.kind === "VIDEO") {
-        const result = await sendWhatsAppVideo(String(waTo), item.mediaUrl, item.caption || "", {
+        const result = await sendWhatsAppVideo(target, item.mediaUrl, item.caption || "", {
           mediaId: item.mediaId || "",
           mimeType: item.mimeType || "",
           filename: item.filename || "",
@@ -4324,7 +4375,7 @@ app.post("/agent_message", async (req, res) => {
       }
 
       if (item.kind === "LOCATION") {
-        const result = await sendWhatsAppLocation(String(waTo), {
+        const result = await sendWhatsAppLocation(target, {
           latitude: item.latitude,
           longitude: item.longitude,
           name: item.name || "",
@@ -4365,6 +4416,7 @@ app.post("/conversation_mode", async (req, res) => {
     const target = String(waTo).trim();
     const session = await getSession(target);
     session.conversationMode = normalizedMode;
+    clearAwaitingAdvisor(session);
     await saveSession(target, session);
 
     if ((typeof notifyUser === "boolean" ? notifyUser : HUMAN_MODE_NOTIFY_USER) === true) {
@@ -4487,6 +4539,15 @@ app.post("/webhook", async (req, res) => {
     }
 
     if (session.conversationMode === "human") {
+      await saveSession(from, session);
+      return res.sendStatus(200);
+    }
+
+    if (session.awaitingAdvisor && session.state === "idle") {
+      if (shouldSendAwaitingAdvisorNotice(session)) {
+        await sendWhatsAppText(from, buildAwaitingAdvisorText());
+        markAwaitingAdvisorNoticeSent(session);
+      }
       await saveSession(from, session);
       return res.sendStatus(200);
     }
@@ -4810,14 +4871,18 @@ Ahora indícame tu *nombre completo*.`);
     }
 
     if (session.state === "await_real_tour_email" || session.state === "await_real_tour_phone") {
-      const email = String(userText || "").trim();
-      if (!isValidEmail(email)) {
-        await sendWhatsAppText(from, `Ese correo parece inválido 🙏
+      if (session.state === "await_real_tour_email") {
+        const email = String(userText || "").trim();
+        if (!isValidEmail(email)) {
+          await sendWhatsAppText(from, `Ese correo parece inválido 🙏
 Envíamelo así: nombre@correo.com`);
-        return res.sendStatus(200);
+          return res.sendStatus(200);
+        }
+        session.pendingEmail = email;
+      } else if (!isValidEmail(session.pendingEmail || "")) {
+        session.pendingEmail = "";
       }
 
-      session.pendingEmail = email;
       const contactPhone = String(from || "").replace(/[^\d]/g, "");
       const tour = getRealTourByKey(session.pendingRealTourKey);
       const groupContext = getRealTourGroupContext(session.pendingRealTourGroup || tour?.groupKey || "");
@@ -4857,9 +4922,13 @@ Envíamelo así: nombre@correo.com`);
           `📧 Correo: ${session.pendingEmail || "—"}
 
 ` +
-          `Tu solicitud quedó casi lista. Ahora un asesor de la agencia te contactará para confirmar disponibilidad, validarte el monto final y gestionar el pago.`
+          `Tu solicitud quedó casi lista. Ahora un asesor de la agencia te contactará para confirmar disponibilidad, validarte el monto final y gestionar el pago.
+
+` +
+          `👤 Por favor, espera la atención del asesor por esta misma vía para evitar duplicar la solicitud.`
       );
 
+      markAwaitingAdvisor(session);
       clearIntakeFlow(session);
       return res.sendStatus(200);
     }
