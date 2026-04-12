@@ -663,10 +663,30 @@ function phoneMatchesConversation(convo, phone) {
   return candidates.includes(targetDigits);
 }
 
-async function findBothubConversationIdByPhone(phone) {
+function extractBothubConversationAssigneeId(conversation) {
+  const candidates = [
+    conversation?.assigneeId,
+    conversation?.assignee?.id,
+    conversation?.assignee?.userId,
+    conversation?.assignedToId,
+    conversation?.assignedAgentId,
+    conversation?.ownerId,
+  ];
+
+  for (const value of candidates) {
+    if (value === null || value === undefined) continue;
+    const normalized = String(value).trim();
+    if (normalized) return normalized;
+  }
+
+  return "";
+}
+
+async function findBothubConversationSummary({ phone = "", conversationId = "" } = {}) {
   const baseUrl = deriveBothubApiBaseUrl();
   const botId = deriveBothubBotId();
-  if (!baseUrl || !botId) return "";
+  if (!baseUrl || !botId) return null;
+
   try {
     const res = await axios.get(`${baseUrl}/api/conversations`, {
       params: { botId },
@@ -674,12 +694,28 @@ async function findBothubConversationIdByPhone(phone) {
       timeout: Math.max(BOTHUB_TIMEOUT_MS, 8000),
     });
     const items = Array.isArray(res?.data) ? res.data : [];
-    const found = items.find((c) => phoneMatchesConversation(c, phone));
-    return String(found?.id || "").trim();
+    const targetConversationId = String(conversationId || "").trim();
+
+    if (targetConversationId) {
+      const foundById = items.find((c) => String(c?.id || "").trim() === targetConversationId);
+      if (foundById) return foundById;
+    }
+
+    if (phone) {
+      const foundByPhone = items.find((c) => phoneMatchesConversation(c, phone));
+      if (foundByPhone) return foundByPhone;
+    }
+
+    return null;
   } catch (e) {
-    console.error("findBothubConversationIdByPhone failed:", e?.response?.data || e?.message || e);
-    return "";
+    console.error("findBothubConversationSummary failed:", e?.response?.data || e?.message || e);
+    return null;
   }
+}
+
+async function findBothubConversationIdByPhone(phone) {
+  const found = await findBothubConversationSummary({ phone });
+  return String(found?.id || "").trim();
 }
 
 async function routeConversationToQueue({ session, phone, queueName, reason = "service_selection" }) {
@@ -697,17 +733,29 @@ async function routeConversationToQueue({ session, phone, queueName, reason = "s
   const baseUrl = deriveBothubApiBaseUrl();
   if (!baseUrl) return { ok: false, reason: "missing_api_base" };
 
-  const conversationId = session?.hubConversationId || await findBothubConversationIdByPhone(phone);
+  const conversationSummary = await findBothubConversationSummary({
+    phone,
+    conversationId: session?.hubConversationId || "",
+  });
+
+  const conversationId =
+    String(conversationSummary?.id || session?.hubConversationId || "").trim() ||
+    await findBothubConversationIdByPhone(phone);
+
   if (!conversationId) return { ok: false, reason: "conversation_not_found" };
+
+  const currentAssigneeId = extractBothubConversationAssigneeId(conversationSummary);
+  const patchBody = {
+    queue: nextQueue,
+    transferReason: reason,
+  };
+
+  if (currentAssigneeId) patchBody.assigneeId = currentAssigneeId;
 
   try {
     await axios.patch(
       `${baseUrl}/api/conversations/${encodeURIComponent(conversationId)}`,
-      {
-        queue: nextQueue,
-        assigneeId: null,
-        transferReason: reason,
-      },
+      patchBody,
       {
         headers: {
           "Content-Type": "application/json",
@@ -719,8 +767,9 @@ async function routeConversationToQueue({ session, phone, queueName, reason = "s
     if (session) {
       session.hubConversationId = conversationId;
       session.lastQueueRouted = nextQueue;
+      if (currentAssigneeId) session.hubAssigneeId = currentAssigneeId;
     }
-    return { ok: true, conversationId, queue: nextQueue };
+    return { ok: true, conversationId, queue: nextQueue, assigneePreserved: !!currentAssigneeId };
   } catch (e) {
     console.error("routeConversationToQueue failed:", e?.response?.data || e?.message || e);
     return { ok: false, reason: "patch_failed" };
@@ -5133,8 +5182,17 @@ app.get("/health", (_req, res) => res.status(200).send("ok"));
 // Follow-up + reminders
 // =========================
 async function followupLeadsLoop() {
+  const summary = {
+    ok: true,
+    enabled: FOLLOWUP_ENABLED,
+    scanned: 0,
+    eligible: 0,
+    sent: 0,
+    errors: 0,
+  };
+
   try {
-    if (!FOLLOWUP_ENABLED) return;
+    if (!FOLLOWUP_ENABLED) return summary;
 
     const ids = await listAllSessionIds();
     const now = Date.now();
@@ -5142,6 +5200,7 @@ async function followupLeadsLoop() {
     const minAgeMs = FOLLOWUP_AFTER_MIN * 60 * 1000;
 
     for (const id of ids) {
+      summary.scanned += 1;
       const s = await getSession(id);
       const lead = s?.lead || {};
       if (!lead.tour_key || lead.followupSent || lead.converted) continue;
@@ -5153,9 +5212,12 @@ async function followupLeadsLoop() {
 
       const tour = getAnyTourByKey(lead.tour_key);
       if (!tour) continue;
+      summary.eligible += 1;
 
       const msg =
-        `Hola 👋 Quedó pendiente tu solicitud para *${tour.title}*.\n\n` +
+        `Hola 👋 Quedó pendiente tu solicitud para *${tour.title}*.
+
+` +
         `Si deseas, te ayudo a completarla. Solo responde con la fecha que te interesa 😊`;
 
       try {
@@ -5163,18 +5225,35 @@ async function followupLeadsLoop() {
         s.lead.followupSent = true;
         s.lead.lastInteractionAt = new Date().toISOString();
         await saveSession(id, s);
+        summary.sent += 1;
       } catch (e) {
+        summary.errors += 1;
         console.error("followup send error:", id, e?.response?.data || e?.message || e);
       }
     }
+
+    return summary;
   } catch (e) {
+    summary.ok = false;
+    summary.errors += 1;
+    summary.error = e?.response?.data || e?.message || String(e);
     console.error("followupLeadsLoop error:", e?.response?.data || e?.message || e);
+    return summary;
   }
 }
 
 async function reminderLoop() {
+  const summary = {
+    ok: true,
+    enabled: !!(GOOGLE_CALENDAR_ID && process.env.GOOGLE_SERVICE_ACCOUNT_JSON),
+    scanned: 0,
+    sent24h: 0,
+    sent2h: 0,
+    errors: 0,
+  };
+
   try {
-    if (!GOOGLE_CALENDAR_ID || !process.env.GOOGLE_SERVICE_ACCOUNT_JSON) return;
+    if (!GOOGLE_CALENDAR_ID || !process.env.GOOGLE_SERVICE_ACCOUNT_JSON) return summary;
 
     const calendar = getCalendarClient();
     const now = new Date();
@@ -5182,6 +5261,7 @@ async function reminderLoop() {
     const events = await listReservationEvents(calendar, now.toISOString(), in26h.toISOString());
 
     for (const ev of events) {
+      summary.scanned += 1;
       const priv = ev.extendedProperties?.private || {};
       if (priv.status === "cancelled") continue;
 
@@ -5198,39 +5278,69 @@ async function reminderLoop() {
       const in2hWindow = minutesToStart <= 135 && minutesToStart >= 90;
 
       if (REMINDER_24H && in24hWindow && priv.reminder24hSent !== "true") {
-        const msg =
-          `Recordatorio 🌴: mañana tienes reserva para *${tour?.title || "tu tour"}* a las ${formatTimeInTZ(startISO, BUSINESS_TIMEZONE)}.\n` +
-          `🚐 Salida / pickup: ${pickup}\n\n` +
-          `Responde:\n1) Confirmar\n2) Reprogramar\n3) Cancelar`;
+        try {
+          const msg =
+            `Recordatorio 🌴: mañana tienes reserva para *${tour?.title || "tu tour"}* a las ${formatTimeInTZ(startISO, BUSINESS_TIMEZONE)}.
+` +
+            `🚐 Salida / pickup: ${pickup}
 
-        const sendRes = await sendReminderWhatsAppToBestTarget(priv, phone, msg);
-        if (sendRes.ok) {
-          await calendar.events.patch({
-            calendarId: GOOGLE_CALENDAR_ID,
-            eventId: ev.id,
-            requestBody: { extendedProperties: { private: { ...priv, reminder24hSent: "true" } } },
-          });
+` +
+            `Responde:
+1) Confirmar
+2) Reprogramar
+3) Cancelar`;
+
+          const sendRes = await sendReminderWhatsAppToBestTarget(priv, phone, msg);
+          if (sendRes.ok) {
+            await calendar.events.patch({
+              calendarId: GOOGLE_CALENDAR_ID,
+              eventId: ev.id,
+              requestBody: { extendedProperties: { private: { ...priv, reminder24hSent: "true" } } },
+            });
+            summary.sent24h += 1;
+          }
+        } catch (e) {
+          summary.errors += 1;
+          console.error("Reminder 24h error:", ev?.id, e?.response?.data || e?.message || e);
         }
       }
 
       if (REMINDER_2H && in2hWindow && priv.reminder2hSent !== "true") {
-        const msg =
-          `Recordatorio 🌴: tu salida para *${tour?.title || "tu tour"}* es hoy a las ${formatTimeInTZ(startISO, BUSINESS_TIMEZONE)}.\n` +
-          `🚐 Punto de salida: ${pickup}\n\n` +
-          `Responde:\n1) Confirmar\n2) Reprogramar\n3) Cancelar`;
+        try {
+          const msg =
+            `Recordatorio 🌴: tu salida para *${tour?.title || "tu tour"}* es hoy a las ${formatTimeInTZ(startISO, BUSINESS_TIMEZONE)}.
+` +
+            `🚐 Punto de salida: ${pickup}
 
-        const sendRes = await sendReminderWhatsAppToBestTarget(priv, phone, msg);
-        if (sendRes.ok) {
-          await calendar.events.patch({
-            calendarId: GOOGLE_CALENDAR_ID,
-            eventId: ev.id,
-            requestBody: { extendedProperties: { private: { ...priv, reminder2hSent: "true" } } },
-          });
+` +
+            `Responde:
+1) Confirmar
+2) Reprogramar
+3) Cancelar`;
+
+          const sendRes = await sendReminderWhatsAppToBestTarget(priv, phone, msg);
+          if (sendRes.ok) {
+            await calendar.events.patch({
+              calendarId: GOOGLE_CALENDAR_ID,
+              eventId: ev.id,
+              requestBody: { extendedProperties: { private: { ...priv, reminder2hSent: "true" } } },
+            });
+            summary.sent2h += 1;
+          }
+        } catch (e) {
+          summary.errors += 1;
+          console.error("Reminder 2h error:", ev?.id, e?.response?.data || e?.message || e);
         }
       }
     }
+
+    return summary;
   } catch (e) {
+    summary.ok = false;
+    summary.errors += 1;
+    summary.error = e?.response?.data || e?.message || String(e);
     console.error("Reminder loop error:", e?.response?.data || e?.message || e);
+    return summary;
   }
 }
 
@@ -5262,8 +5372,18 @@ ${summaryText}`;
 }
 
 async function menuInactivityReminderLoop() {
+  const summary = {
+    ok: true,
+    enabled: MENU_INACTIVITY_REMINDER_ENABLED,
+    scanned: 0,
+    eligible: 0,
+    sent: 0,
+    deactivated: 0,
+    errors: 0,
+  };
+
   try {
-    if (!MENU_INACTIVITY_REMINDER_ENABLED) return;
+    if (!MENU_INACTIVITY_REMINDER_ENABLED) return summary;
 
     const ids = await listAllSessionIds();
     const now = Date.now();
@@ -5272,17 +5392,22 @@ async function menuInactivityReminderLoop() {
     const maxSends = Math.max(1, Math.floor(maxAgeMs / intervalMs));
 
     for (const id of ids) {
+      summary.scanned += 1;
       const s = await getSession(id);
       const reminder = s?.menuReminder || {};
       if (!reminder.active || !reminder.menuShownAt) continue;
+      summary.eligible += 1;
+
       if (!isInitialMenuState(s)) {
         disableMenuInactivityReminder(s);
         await saveSession(id, s);
+        summary.deactivated += 1;
         continue;
       }
       if (hasUserRespondedAfterMenu(s)) {
         disableMenuInactivityReminder(s);
         await saveSession(id, s);
+        summary.deactivated += 1;
         continue;
       }
 
@@ -5290,6 +5415,7 @@ async function menuInactivityReminderLoop() {
       if (!Number.isFinite(shownAtMs)) {
         disableMenuInactivityReminder(s);
         await saveSession(id, s);
+        summary.deactivated += 1;
         continue;
       }
 
@@ -5297,6 +5423,7 @@ async function menuInactivityReminderLoop() {
       if (ageMs < 0) {
         disableMenuInactivityReminder(s);
         await saveSession(id, s);
+        summary.deactivated += 1;
         continue;
       }
 
@@ -5306,6 +5433,7 @@ async function menuInactivityReminderLoop() {
       if (sentCount >= maxSends) {
         disableMenuInactivityReminder(s);
         await saveSession(id, s);
+        summary.deactivated += 1;
         continue;
       }
 
@@ -5321,24 +5449,37 @@ async function menuInactivityReminderLoop() {
         s.menuReminder.reminder2Sent = nextReminderNumber >= 2;
         if (nextReminderNumber >= maxSends || ageMs >= maxAgeMs) {
           disableMenuInactivityReminder(s);
+          summary.deactivated += 1;
         }
         await saveSession(id, s);
+        summary.sent += 1;
       } catch (e) {
+        summary.errors += 1;
         console.error("menu inactivity reminder send error:", id, e?.response?.data || e?.message || e);
       }
     }
+
+    return summary;
   } catch (e) {
+    summary.ok = false;
+    summary.errors += 1;
+    summary.error = e?.response?.data || e?.message || String(e);
     console.error("menuInactivityReminderLoop error:", e?.response?.data || e?.message || e);
+    return summary;
   }
 }
 
 app.get("/tick", async (_req, res) => {
-  try {
-    await reminderLoop();
-    await followupLeadsLoop();
-    await menuInactivityReminderLoop();
-  } catch {}
-  return res.status(200).send("tick ok");
+  const startedAt = new Date().toISOString();
+
+  const results = {
+    calendarReminders: await reminderLoop(),
+    leadFollowups: await followupLeadsLoop(),
+    menuInactivityReminders: await menuInactivityReminderLoop(),
+  };
+
+  console.log("tick summary:", JSON.stringify({ startedAt, results }));
+  return res.status(200).json({ ok: true, startedAt, results });
 });
 
 app.listen(PORT, () => console.log(`Bot running on :${PORT}`));
